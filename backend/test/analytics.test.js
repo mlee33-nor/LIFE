@@ -71,3 +71,19 @@ test('lifestyleCorrelations detects a strong relationship', () => {
   assert.equal(row.r, 1);
   assert.equal(row.strength, 'strong positive');
 });
+
+test('days_since_last_log uses the Phoenix date, not UTC', () => {
+  // 04:30 UTC on the 26th is still the 25th in Phoenix.
+  const realNow = Date.now;
+  Date.now = () => new Date('2026-09-26T04:30:00Z').getTime();
+  const RealDate = Date;
+  global.Date = class extends RealDate {
+    constructor(...a) { super(...(a.length ? a : [Date.now()])); }
+  };
+  try {
+    assert.equal(summary([day('2026-09-25', { stomach_pain: 1 })]).days_since_last_log, 0);
+  } finally {
+    global.Date = RealDate;
+    Date.now = realNow;
+  }
+});

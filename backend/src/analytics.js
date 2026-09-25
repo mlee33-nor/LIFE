@@ -1,7 +1,7 @@
 // Derived insights over the daily records produced by aggregateDaily().
 // These are simple associations over personal data, not medical findings.
 
-import { HABITS, METRICS } from './interpret.js';
+import { HABITS, METRICS, localDate } from './interpret.js';
 
 export const SYMPTOMS = ['stomach_pain', 'acne', 'headache'];
 
@@ -216,7 +216,7 @@ export function summary(daily, { days = 30, to } = {}) {
     period: { from: start, to: end, days },
     days_logged: current.length,
     last_logged_date: lastLogged,
-    days_since_last_log: daysBetween(lastLogged, new Date().toISOString().slice(0, 10)),
+    days_since_last_log: daysBetween(lastLogged, localDate(new Date())),
     averages: curAvg,
     previous_period_averages: prevAvg,
     change_vs_previous: change,

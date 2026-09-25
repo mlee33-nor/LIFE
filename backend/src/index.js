@@ -87,7 +87,9 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
 
   function broadcast(event, data) {
     const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of clients) res.write(msg);
+    for (const res of clients) {
+      if (!res.destroyed) res.write(msg);
+    }
   }
 
   // Coalesce bursts of writes into one push to the UI.
@@ -262,11 +264,15 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         });
         res.write('retry: 3000\n\n');
         clients.add(res);
-        const ping = setInterval(() => res.write(': ping\n\n'), 25000);
-        req.on('close', () => {
+        const ping = setInterval(() => {
+          if (!res.destroyed) res.write(': ping\n\n');
+        }, 25000);
+        const cleanup = () => {
           clearInterval(ping);
           clients.delete(res);
-        });
+        };
+        req.on('close', cleanup);
+        res.on('error', cleanup); // client vanished mid-write (EPIPE etc.)
         return;
       }
 

@@ -16,7 +16,13 @@ export function sslFor(connectionString) {
 }
 
 export function createPool(connectionString = process.env.DATABASE_URL) {
-  if (!connectionString) throw new Error('DATABASE_URL is not set');
+  if (!connectionString) {
+    throw new Error(
+      'DATABASE_URL is not set. For local dev, start Postgres with\n' +
+        '  docker run -d --name life-pg -e POSTGRES_PASSWORD=dev -p 55432:5432 postgres:16-alpine\n' +
+        'then set DATABASE_URL=postgresql://postgres:dev@localhost:55432/postgres (see backend/API.md).'
+    );
+  }
   return new pg.Pool({ connectionString, ssl: sslFor(connectionString), max: 5 });
 }
 
