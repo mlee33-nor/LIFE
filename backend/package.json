@@ -1,0 +1,20 @@
+{
+  "name": "lifestyle-dashboard-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API for tracking lifestyle, eating, stomach pain and acne (Postgres + Muse write API)",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test \"test/*.test.js\"",
+    "db:seed-sample": "node scripts/seed-sample.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "^8.16.0"
+  }
+}
