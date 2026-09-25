@@ -4,7 +4,7 @@
 
 export const TIMEZONE = process.env.APP_TIMEZONE || 'America/Phoenix';
 
-export const ACTIVITIES = ['work', 'hmwk', 'workout', 'walk'];
+export const ACTIVITIES = ['work', 'hmwk', 'workout', 'walk', 'rest'];
 export const HABITS = [
   'water', 'meal', 'shower', 'room_clean', 'am_skincare', 'pm_skincare',
   'sunscreen', 'morning_ritual', 'bedtime',
@@ -14,11 +14,19 @@ export const HABITS = [
 export const METRICS = [
   'stomach_pain',
   'acne',
+  'headache',
+  'sleep_hours',
+  'wake_hour',
   'water',
   'meals_logged',
   'habits_done',
+  'misses',
+  'xp',
   ...ACTIVITIES.map((a) => `${a}_minutes`),
 ];
+
+// A bedtime more than this long before a wake-up isn't counted as sleep.
+const MAX_SLEEP_HOURS = 16;
 
 const dayFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit',
@@ -78,12 +86,21 @@ function emptyDay(date) {
     stomach_pain: null,
     pain_reports: [],
     acne: null,
+    headache: null,
+    headache_reports: [],
+    wake_time: null,
+    wake_hour: null,
+    sleep_hours: null,
     meals: [],
     foods: [],
     meals_logged: 0,
     water: null,
     habits: {},
     habits_done: 0,
+    missed_habits: [],
+    misses: 0,
+    xp: 0,
+    xp_events: [],
     sessions: [],
     ...Object.fromEntries(ACTIVITIES.map((a) => [`${a}_minutes`, 0])),
     hmwk_by_subject: {},
@@ -101,6 +118,7 @@ export function interpret(events) {
     return days.get(date);
   };
   const open = new Map(); // sessionKey -> start event
+  let lastBedtime = null;
 
   const addSession = (d, activity, subject, minutes, startAt, endAt) => {
     if (minutes === null || minutes < 0) return;
@@ -143,6 +161,29 @@ export function interpret(events) {
       d.habits[data.habit] = h;
       if (data.habit === 'water') d.water = h.value ?? h.count;
       if (data.habit === 'meal') d.meals_logged++;
+      if (data.habit === 'bedtime') lastBedtime = e.at;
+    } else if (e.tracker === 'life' && data.kind === 'wake') {
+      // First wake-up of the day sets wake time; sleep runs from the last bedtime.
+      if (d.wake_time === null) {
+        const hhmm = localIso(e.at).slice(11, 16);
+        d.wake_time = hhmm;
+        d.wake_hour = Math.round((Number(hhmm.slice(0, 2)) + Number(hhmm.slice(3)) / 60) * 100) / 100;
+        const hours = lastBedtime ? (e.at - lastBedtime) / 3600000 : null;
+        if (hours !== null && hours > 0 && hours <= MAX_SLEEP_HOURS) d.sleep_hours = Math.round(hours * 100) / 100;
+      }
+      lastBedtime = null;
+    } else if (e.tracker === 'life' && data.kind === 'headache') {
+      const severity = num(data.severity);
+      if (severity !== null) {
+        d.headache_reports.push({ at: localIso(e.at), severity, text: data.text ?? null });
+        d.headache = Math.max(d.headache ?? 0, severity);
+      }
+    } else if (e.tracker === 'life' && data.kind === 'miss' && data.habit) {
+      if (!d.missed_habits.includes(data.habit)) d.missed_habits.push(data.habit);
+      d.misses = d.missed_habits.length;
+    } else if (e.tracker === 'life' && data.kind === 'xp' && num(data.amount) !== null) {
+      d.xp += num(data.amount);
+      d.xp_events.push({ at: localIso(e.at), amount: num(data.amount), reason: data.reason ?? null });
     } else if (e.tracker === 'food') {
       const pain = num(data.pain);
       if (pain !== null) {

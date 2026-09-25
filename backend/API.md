@@ -37,6 +37,13 @@ gets a `401`.
 
 → `200 { "entries": [ { "id": "123", "tracker": "food", "at": "2026-09-25T12:00:00-07:00", "data": { } } ] }`
 
+### `GET/POST /submit`: browser form
+
+A key-gated HTML form (key field, JSON box, submit) for agents that drive a
+browser but can't send headers. The JSON box takes a `/log` body, a list of
+them (saved all-or-nothing), or `{"delete": "<id>"}`. The result box
+`#result` has `data-status="success|error"`.
+
 ### `DELETE /entries/:id` (extra, for corrections)
 
 Soft-deletes an event, e.g. when Myles says "delete that". The event is
@@ -46,8 +53,12 @@ excluded from everything afterwards. → `200 { "ok": true, "deleted": "123" }` 
 
 | tracker | data | used for |
 |---|---|---|
-| life | `{kind:"session", action:"start"\|"end", activity:"work"\|"hmwk"\|"workout"\|"walk", subject, minutes}` | activity minutes. Start/end are paired by activity+subject; `minutes` on an end event overrides the computed duration; an end with `minutes` and no start also counts |
-| life | `{kind:"habit", habit, value}` | habit completion; `water` is summed by `value` (or counted if null) |
+| life | `{kind:"session", action:"start"\|"end", activity:"work"\|"hmwk"\|"workout"\|"walk"\|"rest", subject, minutes}` | activity minutes. Start/end are paired by activity+subject; `minutes` on an end event overrides the computed duration; an end with `minutes` and no start also counts |
+| life | `{kind:"habit", habit, value}` | habit completion; `water` is summed by `value` (or counted if null); `bedtime` starts the sleep timer |
+| life | `{kind:"wake", text}` | first wake of the day → `wake_time`/`wake_hour`; `sleep_hours` = last bedtime → wake (≤16 h) |
+| life | `{kind:"headache", severity, text}` | headache (daily max, 0-10); analyzed like stomach pain |
+| life | `{kind:"miss", habit, text}` | `missed_habits`, `misses` count, `days_missed` per habit |
+| life | `{kind:"xp", amount, reason}` | `xp` per day, `xp_events`, totals in summary |
 | food | `{kind:"meal", text, pain}` | food keywords taken from `text` for trigger analysis |
 | food | `{kind:"pain_report", text, pain}` | stomach pain (daily max of `pain`, 0-10) |
 | skin | `{kind:"routine"\|"photo"\|"note", text, photo_ref, severity}` | skin log; `severity` (0-10) is the daily acne score (daily max) |
@@ -81,14 +92,15 @@ Headline numbers for the last `days` days ending at `to` (defaults to the latest
   "active_sessions": [{ "activity": "hmwk", "subject": "history", "started_at": "..." }],  // "currently doing"
   "period": { "from": "2026-08-27", "to": "2026-09-25", "days": 30 },
   "days_logged": 30, "last_logged_date": "2026-09-25", "days_since_last_log": 0,
-  "averages":                 { "stomach_pain": 3.8, "acne": 4.1, "water": 4.4, "meals_logged": 3.4, "habits_done": 4.4, "work_minutes": 0, "hmwk_minutes": 48, "workout_minutes": 28, "walk_minutes": 0 },
+  "averages":                 { "stomach_pain": 3.8, "acne": 4.1, "headache": 1.2, "sleep_hours": 7.4, "wake_hour": 7.2, "water": 4.4, "meals_logged": 3.4, "habits_done": 4.4, "misses": 0.6, "xp": 35, "work_minutes": 0, "hmwk_minutes": 48, "workout_minutes": 28, "walk_minutes": 0, "rest_minutes": 12 },
   "previous_period_averages": { ...same keys },
   "change_vs_previous":       { ...same keys, current minus previous },
-  "flare_days":               { "stomach_pain": 8, "acne": 7 },       // days scoring >= flare_threshold (4)
+  "flare_days":               { "stomach_pain": 8, "acne": 7, "headache": 2 },       // days scoring >= flare_threshold (4)
   "worst_day":                { "stomach_pain": { "date": "...", "value": 8 }, "acne": null },
   "current_streak_without_flare": { "stomach_pain": 0, "acne": 2 },
   "top_foods": [{ "food": "rice", "days_eaten": 6 }],
-  "habit_completion": { "sunscreen": { "days_done": 5, "rate": 0.36 }, ... },
+  "habit_completion": { "sunscreen": { "days_done": 5, "days_missed": 3, "rate": 0.36 }, ... },
+  "xp": { "period_total": 1050, "all_time_total": 1575, "today": 40 },
   "hmwk_minutes_by_subject": { "history": 293, "math": 133 },
   "totals_minutes": { "work_minutes": 0, "hmwk_minutes": 677, ... }
 }
@@ -103,10 +115,13 @@ One record per day. Use it for day views, calendars, and heatmaps.
   "date": "2026-09-25", "event_count": 19,
   "stomach_pain": 6, "pain_reports": [{ "at": "...", "pain": 6, "text": "bloated" }],
   "acne": 6,                                   // null if no severity logged
+  "headache": 3, "headache_reports": [{ "at": "...", "severity": 3, "text": "dull" }],
+  "wake_time": "07:15", "wake_hour": 7.25, "sleep_hours": 7.75,   // null if not logged
   "meals": [{ "at": "...", "text": "chicken burrito" }], "foods": ["chicken", "burrito"], "meals_logged": 5,
   "water": 5, "habits": { "water": { "count": 5, "value": 5 }, "sunscreen": { "count": 1, "value": null } }, "habits_done": 4,
+  "missed_habits": ["sunscreen"], "misses": 1, "xp": 40, "xp_events": [{ "at": "...", "amount": 10, "reason": "hmwk" }],
   "sessions": [{ "activity": "hmwk", "subject": "history", "minutes": 84, "start": "...", "end": "..." }],
-  "work_minutes": 0, "hmwk_minutes": 84, "workout_minutes": 0, "walk_minutes": 0, "hmwk_by_subject": { "history": 84 },
+  "work_minutes": 0, "hmwk_minutes": 84, "workout_minutes": 0, "walk_minutes": 0, "rest_minutes": 0, "hmwk_by_subject": { "history": 84 },
   "skin": { "routines": 1, "photos": 0, "notes": [{ "at": "...", "kind": "routine", "text": "..." }] },
   "notes": [{ "tracker": "food", "at": "...", "text": "..." }]
 }] }
@@ -115,7 +130,7 @@ One record per day. Use it for day views, calendars, and heatmaps.
 ### `GET /api/timeseries?metrics=stomach_pain,acne&from=&to=&smooth=7`
 
 One point per calendar day (days with no data are `null`), plus a trailing moving average `<metric>_avg<smooth>`.
-Metrics: `stomach_pain, acne, water, meals_logged, habits_done, work_minutes, hmwk_minutes, workout_minutes, walk_minutes`.
+Metrics: `stomach_pain, acne, headache, sleep_hours, wake_hour, water, meals_logged, habits_done, misses, xp, work_minutes, hmwk_minutes, workout_minutes, walk_minutes, rest_minutes`.
 
 ```json
 { "from": "...", "to": "...", "smooth": 7, "points": [{ "date": "2026-09-24", "stomach_pain": 7, "stomach_pain_avg7": 4.3 }] }
@@ -123,7 +138,7 @@ Metrics: `stomach_pain, acne, water, meals_logged, habits_done, work_minutes, hm
 
 ### `GET /api/insights/foods?min_days=3&from=&to=`
 
-Possible trigger foods, sorted by `difference` (how much worse the symptom is after eating the food than otherwise). Each lag is tested separately: stomach pain at 0-1 days after eating, acne at 1-3 days.
+Possible trigger foods, sorted by `difference` (how much worse the symptom is after eating the food than otherwise). Each lag is tested separately: stomach pain and headache at 0-1 days after eating, acne at 1-3 days. The response has a `headache` block alongside `stomach_pain` and `acne`.
 
 ```json
 { "stomach_pain": { "window_days": [0, 1], "foods": [
@@ -137,7 +152,7 @@ Food names are keywords pulled from Instinct's free-text meal descriptions, so e
 
 ### `GET /api/insights/lifestyle?from=&to=`
 
-Pearson correlations between each lifestyle metric and each symptom, on the same day (`lag_days: 0`) and the next day (`1`), sorted by strength.
+Pearson correlations between each lifestyle metric and each symptom (stomach pain, acne, headache), on the same day (`lag_days: 0`) and the next day (`1`), sorted by strength.
 
 ```json
 { "correlations": [{ "factor": "workout_minutes", "symptom": "stomach_pain", "lag_days": 0, "r": -0.25, "n": 45, "strength": "weak negative" }] }

@@ -4,6 +4,7 @@
 //   POST   /log               append one event
 //   GET    /entries           raw events for one tracker
 //   DELETE /entries/:id       soft-delete a mistaken event
+//   GET/POST /submit          same, as a key-gated HTML form for browser agents
 //
 // Dashboard routes (/api/*) for the UI — interpreted data and insights.
 //
@@ -19,6 +20,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPool, migrate, PgStore } from './db.js';
+import { handleForm } from './form.js';
 import { METRICS, TIMEZONE, ACTIVITIES, HABITS, localDate, localIso } from './interpret.js';
 import {
   checkApiKey,
@@ -230,6 +232,11 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
     const url = new URL(req.url, 'http://localhost');
 
     try {
+      if (url.pathname === '/submit' && (req.method === 'GET' || req.method === 'POST')) {
+        await handleForm(req, res, { pool, store, writeApiKey });
+        return;
+      }
+
       if (url.pathname === '/log' || url.pathname.startsWith('/entries')) {
         sendJson(res, 200, await handleAgent(req, url));
         return;

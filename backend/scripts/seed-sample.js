@@ -46,9 +46,17 @@ for (let i = DAYS - 1; i >= 0; i--) {
   const d = new Date(Date.UTC(todayPhx.getUTCFullYear(), todayPhx.getUTCMonth(), todayPhx.getUTCDate() - i));
   const date = d.toISOString().slice(0, 10);
 
+  const wake = `07:${String(Math.floor(rnd() * 50)).padStart(2, '0')}`;
+  add('life', date, wake, { kind: 'wake', text: null });
+  let xp = 0;
   if (rnd() < 0.7) add('life', date, '07:30', { kind: 'habit', habit: 'morning_ritual', value: null });
   if (rnd() < 0.8) add('life', date, '07:45', { kind: 'habit', habit: 'am_skincare', value: null });
   if (rnd() < 0.5) add('life', date, '07:50', { kind: 'habit', habit: 'sunscreen', value: null });
+  else add('life', date, '20:00', { kind: 'miss', habit: 'sunscreen', text: 'forgot' });
+  if (rnd() < 0.25) {
+    add('life', date, '14:00', { kind: 'headache', severity: 3 + Math.floor(rnd() * 5), text: 'behind eyes' });
+  }
+  if (rnd() < 0.3) add('life', date, '15:00', { kind: 'session', action: 'end', activity: 'rest', subject: null, minutes: 20 + Math.floor(rnd() * 30) });
 
   const meals = [['08:00', pick(BREAKFAST)], ['12:30', pick(LUNCH)], ['19:00', pick(DINNER)]];
   if (rnd() < 0.4) meals.push(['15:30', pick(SNACK)]);
@@ -65,6 +73,7 @@ for (let i = DAYS - 1; i >= 0; i--) {
     add('life', date, '16:00', { kind: 'session', action: 'start', activity: 'hmwk', subject, minutes: null });
     add('life', date, `${16 + Math.floor(len / 60)}:${String(len % 60).padStart(2, '0')}`,
       { kind: 'session', action: 'end', activity: 'hmwk', subject, minutes: null });
+    xp += 20;
   }
   if (rnd() < 0.5) {
     add('life', date, '18:00', { kind: 'session', action: 'end', activity: 'workout', subject: null, minutes: 30 + Math.floor(rnd() * 40) });
@@ -78,6 +87,8 @@ for (let i = DAYS - 1; i >= 0; i--) {
   if (rnd() < 0.85) add('life', date, '22:00', { kind: 'habit', habit: 'pm_skincare', value: null });
   add('skin', date, '22:05', { kind: 'routine', text: 'cleanser + moisturizer', severity });
   add('life', date, '23:00', { kind: 'habit', habit: 'bedtime', value: null });
+  xp += 5 * Math.floor(rnd() * 4);
+  if (xp) add('life', date, '23:01', { kind: 'xp', amount: xp, reason: 'daily habits' });
 
   prevDairy = DAIRY.test(text);
   sweets.push(SWEET.test(text));

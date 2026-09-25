@@ -67,6 +67,23 @@ export async function insertLog(pool, { tracker, at, data }) {
   return String(rows[0].id);
 }
 
+// Inserts several validated entries atomically; returns their ids.
+export async function insertLogs(pool, entries) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ids = [];
+    for (const e of entries) ids.push(await insertLog(client, e));
+    await client.query('COMMIT');
+    return ids;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function listEntries(pool, params) {
   const tracker = params.get('tracker');
   if (!TRACKERS.includes(tracker)) {
@@ -107,16 +124,24 @@ export function checkApiKey(req, expected, url) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-export async function readJson(req, limit = 100_000) {
+export async function readBody(req, limit = 100_000) {
   let body = '';
   for await (const chunk of req) {
     body += chunk;
     if (body.length > limit) throw Object.assign(new Error('Request body too large'), { status: 413 });
   }
-  if (!body.trim()) throw new ValidationError(['request body is empty']);
+  return body;
+}
+
+export function parseJson(text) {
+  if (!text.trim()) throw new ValidationError(['request body is empty']);
   try {
-    return JSON.parse(body);
+    return JSON.parse(text);
   } catch {
     throw new ValidationError(['request body is not valid JSON']);
   }
+}
+
+export async function readJson(req) {
+  return parseJson(await readBody(req));
 }

@@ -3,13 +3,14 @@
 
 import { HABITS, METRICS } from './interpret.js';
 
-export const SYMPTOMS = ['stomach_pain', 'acne'];
+export const SYMPTOMS = ['stomach_pain', 'acne', 'headache'];
 
 // Days after eating a food to look for a symptom. Stomach pain tends to
 // show up the same or next day; acne usually lags by a few days.
 export const SYMPTOM_WINDOWS = {
   stomach_pain: [0, 1],
   acne: [1, 3],
+  headache: [0, 1],
 };
 
 // A day at or above this score counts as a "flare" day.
@@ -229,6 +230,11 @@ export function summary(daily, { days = 30, to } = {}) {
     flare_threshold: FLARE_THRESHOLD,
     top_foods: topFoods, // keywords pulled from meal descriptions
     habit_completion: habitCompletion(current),
+    xp: {
+      period_total: current.reduce((a, d) => a + d.xp, 0),
+      all_time_total: daily.reduce((a, d) => a + d.xp, 0),
+      today: daily[daily.length - 1].date === end ? daily[daily.length - 1].xp : 0,
+    },
     hmwk_minutes_by_subject: hmwkBySubject(current),
     totals_minutes: Object.fromEntries(
       METRICS.filter((m) => m.endsWith('_minutes')).map((m) => [m, current.reduce((a, d) => a + (d[m] ?? 0), 0)])
@@ -236,13 +242,18 @@ export function summary(daily, { days = 30, to } = {}) {
   };
 }
 
-// Share of logged days each habit was done, e.g. { sunscreen: 0.4 }.
+// Per habit: days done, days explicitly missed, and share of logged days done.
 function habitCompletion(days) {
   if (!days.length) return {};
-  const seen = new Set([...HABITS, ...days.flatMap((d) => Object.keys(d.habits))]);
+  const seen = new Set([
+    ...HABITS,
+    ...days.flatMap((d) => Object.keys(d.habits)),
+    ...days.flatMap((d) => d.missed_habits),
+  ]);
   return Object.fromEntries(
     [...seen].map((h) => [h, {
       days_done: days.filter((d) => d.habits[h]).length,
+      days_missed: days.filter((d) => d.missed_habits.includes(h)).length,
       rate: round(days.filter((d) => d.habits[h]).length / days.length),
     }])
   );

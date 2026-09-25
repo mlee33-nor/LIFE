@@ -4,7 +4,7 @@ import { addDays, foodTriggers, lifestyleCorrelations, summary, timeseries } fro
 
 function day(date, fields = {}) {
   return {
-    date, foods: [], habits: {}, hmwk_by_subject: {},
+    date, foods: [], habits: {}, hmwk_by_subject: {}, missed_habits: [], xp: 0, headache: null,
     stomach_pain: null, acne: null, water: null, meals_logged: 0, habits_done: 0,
     work_minutes: 0, hmwk_minutes: 0, workout_minutes: 0, walk_minutes: 0,
     ...fields,

@@ -9,12 +9,33 @@ won't show up on the dashboard.
 ## Connection
 
 - Base URL: `https://api-production-2ace4.up.railway.app`
-- Every request carries: `Authorization: Bearer <API_KEY>` (the key is shared
-  privately; it is not in this file)
-- Body: JSON, `Content-Type: application/json`
 - Timezone: **America/Phoenix** (UTC-7, no daylight saving)
+- API key: shared privately; it is not in this file
 
-## POST /log — append one entry
+## Using the browser form (for Instinct)
+
+Open **`https://api-production-2ace4.up.railway.app/submit`**:
+
+1. Type the API key into the **API key** field (`#key`).
+2. Put the entry JSON into the **Entry JSON** box (`#json`). The body is
+   the same as `POST /log` below: one entry `{"tracker", "at", "data"}`,
+   or a **list** `[{...}, {...}]` when one message needs several entries.
+3. Click **Submit** (`#submit`).
+4. Read the result box (`#result`). `data-status="success"` shows e.g.
+   "Logged 2 entries, id 41, 42"; `data-status="error"` lists what was
+   wrong, and **nothing is saved** from that submission. Fix it and resubmit.
+
+The key stays filled in after each submit. Below the form is a table of
+the 10 latest entries with their ids. To remove a mistaken entry, submit
+`{"delete": "42"}`. To look entries up, open
+`/entries?tracker=food&since=2026-09-25&key=<API_KEY>`.
+
+## Using HTTP directly (if an agent can send headers)
+
+Every request carries `Authorization: Bearer <API_KEY>` and a JSON body
+(`Content-Type: application/json`).
+
+## POST /log — append one entry (same body as the form's JSON box)
 
 ```json
 { "tracker": "life", "at": "2026-09-25T15:20:00-07:00", "data": { ... } }
@@ -40,7 +61,7 @@ says why.
 { "kind": "session", "action": "end",   "activity": "hmwk", "subject": "history", "minutes": null }
 ```
 
-- `activity`: `work`, `hmwk`, `workout` or `walk`
+- `activity`: `work`, `hmwk`, `workout`, `walk` or `rest` (naps, breaks, lying down)
 - `subject` (hmwk only, otherwise null): `history`, `science`, `math` or `english`
 - Send `start` when Myles starts and `end` when he stops. The dashboard
   pairs them to work out the minutes. The `end` must use the same
@@ -58,6 +79,44 @@ says why.
   `pm_skincare`, `sunscreen`, `morning_ritual` or `bedtime`
 - `value`: for `water`, the number of glasses (they're added up per day).
   Otherwise `null`.
+
+### life: wake up
+
+```json
+{ "kind": "wake", "text": null }
+```
+
+Send this when Myles wakes up (with `at` if he tells you later, e.g. "woke
+up at 7:10"). Sleep hours are calculated from the previous night's
+`bedtime` habit to this wake-up, so log `bedtime` when he goes to sleep.
+
+### life: headaches
+
+```json
+{ "kind": "headache", "severity": 5, "text": "behind eyes since lunch" }
+```
+
+`severity` is 0-10 (use the same scale as stomach pain; estimate if he doesn't
+give a number). Log `"severity": 0` when he says the headache is gone or he
+has none.
+
+### life: missed habits
+
+```json
+{ "kind": "miss", "habit": "sunscreen", "text": "forgot" }
+```
+
+When Myles says he skipped or forgot a habit. `habit` uses the same names
+as the habits list above. One per habit.
+
+### life: XP
+
+```json
+{ "kind": "xp", "amount": 10, "reason": "finished history hmwk" }
+```
+
+Whenever you award Myles XP, log it here. `amount` is a number (negative
+to take XP away). The dashboard adds it up per day and in total.
 
 ### food: meals
 
@@ -121,9 +180,12 @@ To change an entry, delete it and log the corrected version.
 | "done with math" | life `{kind:"session", action:"end", activity:"hmwk", subject:"math", minutes:null}` |
 | "2 glasses of water" | life `{kind:"habit", habit:"water", value:2}` |
 | "pizza and a coke for lunch, stomach kinda hurts" | food `{kind:"meal", text:"pizza, coke", pain:null}` **and** food `{kind:"pain_report", text:"kinda hurts after lunch", pain:4}` |
+| "woke up 7:10, slight headache" | life `{kind:"wake"}` with `at` 07:10 **and** life `{kind:"headache", severity:3, text:"slight"}` |
+| "forgot sunscreen" | life `{kind:"miss", habit:"sunscreen", text:"forgot"}` |
 | "did skincare, skin looking clear today" | life `{kind:"habit", habit:"pm_skincare", value:null}` **and** skin `{kind:"routine", text:"skincare, looking clear", severity:1}` |
 
 ## Non-goals
 
 - Single user (Myles), no accounts.
-- Streaks, XP and levels are calculated by the dashboard, not sent by Instinct.
+- XP is awarded by Instinct and logged as `{kind:"xp"}` entries. Levels and
+  streaks are calculated by the dashboard.

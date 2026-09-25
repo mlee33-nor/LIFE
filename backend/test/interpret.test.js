@@ -70,3 +70,39 @@ test('acne stays null when skin events have no severity', () => {
   const { daily } = interpret([ev(1, 'skin', '2026-09-25T22:00:00-07:00', { kind: 'note', text: 'small breakout' })]);
   assert.equal(daily[0].acne, null);
 });
+
+test('wake time and sleep hours come from bedtime -> wake', () => {
+  const { daily } = interpret([
+    ev(1, 'life', '2026-09-24T23:30:00-07:00', { kind: 'habit', habit: 'bedtime', value: null }),
+    ev(2, 'life', '2026-09-25T07:15:00-07:00', { kind: 'wake' }),
+    ev(3, 'life', '2026-09-25T09:00:00-07:00', { kind: 'wake' }), // later wake (after a nap) is ignored
+  ]);
+  const d = daily.find((x) => x.date === '2026-09-25');
+  assert.equal(d.wake_time, '07:15');
+  assert.equal(d.wake_hour, 7.25);
+  assert.equal(d.sleep_hours, 7.75);
+});
+
+test('wake without a recent bedtime has no sleep hours', () => {
+  const { daily } = interpret([ev(1, 'life', '2026-09-25T07:00:00-07:00', { kind: 'wake' })]);
+  assert.equal(daily[0].sleep_hours, null);
+});
+
+test('headaches, misses, xp and rest roll up per day', () => {
+  const { daily } = interpret([
+    ev(1, 'life', '2026-09-25T10:00:00-07:00', { kind: 'headache', severity: 3, text: 'dull' }),
+    ev(2, 'life', '2026-09-25T15:00:00-07:00', { kind: 'headache', severity: 6, text: 'worse' }),
+    ev(3, 'life', '2026-09-25T21:00:00-07:00', { kind: 'miss', habit: 'sunscreen', text: null }),
+    ev(4, 'life', '2026-09-25T21:01:00-07:00', { kind: 'miss', habit: 'sunscreen', text: null }),
+    ev(5, 'life', '2026-09-25T12:00:00-07:00', { kind: 'xp', amount: 10, reason: 'hmwk' }),
+    ev(6, 'life', '2026-09-25T13:00:00-07:00', { kind: 'xp', amount: 5, reason: 'water' }),
+    ev(7, 'life', '2026-09-25T14:00:00-07:00', { kind: 'session', action: 'end', activity: 'rest', subject: null, minutes: 20 }),
+  ]);
+  const d = daily[0];
+  assert.equal(d.headache, 6);
+  assert.equal(d.headache_reports.length, 2);
+  assert.deepEqual(d.missed_habits, ['sunscreen']);
+  assert.equal(d.misses, 1);
+  assert.equal(d.xp, 15);
+  assert.equal(d.rest_minutes, 20);
+});
