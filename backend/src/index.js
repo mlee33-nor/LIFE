@@ -1,6 +1,6 @@
 // HTTP API for the lifestyle dashboard.
 //
-// Muse (Luna) routes, per tracker-api-contract.md — require MUSE_API_KEY:
+// Logging-agent routes (Instinct), per tracker-api-contract.md — require WRITE_API_KEY:
 //   POST   /log               append one event
 //   GET    /entries           raw events for one tracker
 //   DELETE /entries/:id       soft-delete a mistaken event
@@ -8,7 +8,8 @@
 // Dashboard routes (/api/*) for the UI — interpreted data and insights.
 //
 //   DATABASE_URL   Postgres connection string (required)
-//   MUSE_API_KEY   Bearer key Muse uses; Muse routes are disabled if unset
+//   WRITE_API_KEY  Bearer key the logging agent uses; write routes are disabled if unset
+//                  (MUSE_API_KEY is still read as a fallback)
 //   READ_API_KEY   optional; if set, /api/* (except health) require it
 //   APP_TIMEZONE   default America/Phoenix
 //   PORT           default 3001 (Railway sets this)
@@ -79,7 +80,7 @@ function meta(store, state) {
   };
 }
 
-export function createServer(store, { pool, museApiKey, readApiKey } = {}) {
+export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
   const clients = new Set();
 
   function broadcast(event, data) {
@@ -101,11 +102,11 @@ export function createServer(store, { pool, museApiKey, readApiKey } = {}) {
     }, 300);
   });
 
-  // --- Muse routes ----------------------------------------------------
+  // --- Logging-agent routes -------------------------------------------
 
-  async function handleMuse(req, url) {
-    if (!museApiKey) throw new HttpError(503, 'MUSE_API_KEY is not configured on the server');
-    if (!checkApiKey(req, museApiKey, url)) throw new HttpError(401, 'Missing or invalid API key');
+  async function handleAgent(req, url) {
+    if (!writeApiKey) throw new HttpError(503, 'WRITE_API_KEY is not configured on the server');
+    if (!checkApiKey(req, writeApiKey, url)) throw new HttpError(401, 'Missing or invalid API key');
 
     if (url.pathname === '/log' && req.method === 'POST') {
       const id = await insertLog(pool, validateLog(await readJson(req)));
@@ -230,7 +231,7 @@ export function createServer(store, { pool, museApiKey, readApiKey } = {}) {
 
     try {
       if (url.pathname === '/log' || url.pathname.startsWith('/entries')) {
-        sendJson(res, 200, await handleMuse(req, url));
+        sendJson(res, 200, await handleAgent(req, url));
         return;
       }
 
@@ -242,7 +243,7 @@ export function createServer(store, { pool, museApiKey, readApiKey } = {}) {
       }
 
       if (readApiKey && url.pathname !== '/api/health' &&
-          !checkApiKey(req, readApiKey, url) && !checkApiKey(req, museApiKey, url)) {
+          !checkApiKey(req, readApiKey, url) && !checkApiKey(req, writeApiKey, url)) {
         throw new HttpError(401, 'Missing or invalid API key');
       }
 
@@ -298,9 +299,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   await migrate(pool);
   const store = new PgStore(pool);
   await store.listen();
-  const museApiKey = process.env.MUSE_API_KEY;
-  if (!museApiKey) console.warn('MUSE_API_KEY not set: Muse routes are disabled.');
-  createServer(store, { pool, museApiKey, readApiKey: process.env.READ_API_KEY }).listen(PORT, () => {
+  const writeApiKey = process.env.WRITE_API_KEY || process.env.MUSE_API_KEY;
+  if (!writeApiKey) console.warn('WRITE_API_KEY not set: write routes are disabled.');
+  createServer(store, { pool, writeApiKey, readApiKey: process.env.READ_API_KEY }).listen(PORT, () => {
     console.log(`Dashboard API on http://localhost:${PORT} (timezone ${TIMEZONE})`);
   });
 }

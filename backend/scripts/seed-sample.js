@@ -1,4 +1,4 @@
-// Fills the database with ~45 days of fake events in Muse's shapes (see
+// Fills the database with ~45 days of fake events in the contract's shapes (see
 // tracker-api-contract.md) so the UI has something to render before real
 // data exists. Every sample event has data.sample = true.
 //

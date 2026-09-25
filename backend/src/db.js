@@ -1,5 +1,5 @@
 // Postgres access: connection pool, migrations, and a cached store that
-// refreshes when Muse writes (via LISTEN/NOTIFY on `events_changed`).
+// refreshes when the logging agent writes (via LISTEN/NOTIFY on `events_changed`).
 
 import { readFile } from 'node:fs/promises';
 import { EventEmitter } from 'node:events';

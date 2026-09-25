@@ -1,4 +1,4 @@
-// Muse-facing endpoints from tracker-api-contract.md: POST /log and
+// Logging-agent endpoints from tracker-api-contract.md: POST /log and
 // GET /entries (plus DELETE /entries/:id for corrections).
 
 import { timingSafeEqual } from 'node:crypto';

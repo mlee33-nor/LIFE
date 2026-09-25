@@ -1,10 +1,10 @@
 # Lifestyle Dashboard API
 
-Node + Postgres, deployed on Railway. Muse (Luna) writes events; the
+Node + Postgres, deployed on Railway. Instinct (the AI message agent) writes events; the
 dashboard UI reads interpreted data and insights.
 
 ```
-Muse ──POST /log──▶  API  ──▶ Postgres (events table)
+Instinct ─POST /log─▶  API  ──▶ Postgres (events table)
 UI   ◀──/api/*────   API  ◀── LISTEN/NOTIFY (live updates)
 ```
 
@@ -13,9 +13,9 @@ local dates.
 
 ---
 
-## Part 1: Muse routes (per `tracker-api-contract.md`)
+## Part 1: Logging-agent routes (Instinct; full instructions in `../tracker-api-contract.md`)
 
-Every request needs `Authorization: Bearer <MUSE_API_KEY>`, otherwise it
+Every request needs `Authorization: Bearer <WRITE_API_KEY>`, otherwise it
 gets a `401`.
 
 ### `POST /log`: append one event
@@ -50,7 +50,7 @@ excluded from everything afterwards. → `200 { "ok": true, "deleted": "123" }` 
 | life | `{kind:"habit", habit, value}` | habit completion; `water` is summed by `value` (or counted if null) |
 | food | `{kind:"meal", text, pain}` | food keywords taken from `text` for trigger analysis |
 | food | `{kind:"pain_report", text, pain}` | stomach pain (daily max of `pain`, 0-10) |
-| skin | `{kind:"routine"\|"photo"\|"note", text, photo_ref, severity}` | skin log. **Acne charts need `severity` (0-10)**, which isn't in the contract yet; please add it when Myles describes a breakout |
+| skin | `{kind:"routine"\|"photo"\|"note", text, photo_ref, severity}` | skin log; `severity` (0-10) is the daily acne score (daily max) |
 
 Unknown shapes are stored and returned by `/entries`, but the dashboard ignores them.
 
@@ -70,7 +70,7 @@ const es = new EventSource(`${API}/api/events`);
 es.addEventListener('data-updated', () => refetchEverything());
 ```
 
-This fires within about 0.5 s of Muse writing anything.
+This fires within about 0.5 s of Instinct writing anything.
 
 ### `GET /api/summary?days=30&to=YYYY-MM-DD`
 
@@ -133,7 +133,7 @@ Possible trigger foods, sorted by `difference` (how much worse the symptom is af
 ] }, "acne": { ... }, "disclaimer": "..." }
 ```
 
-Food names are keywords pulled from Muse's free-text meal descriptions, so expect some noise. Please show the disclaimer and `confidence`.
+Food names are keywords pulled from Instinct's free-text meal descriptions, so expect some noise. Please show the disclaimer and `confidence`.
 
 ### `GET /api/insights/lifestyle?from=&to=`
 
@@ -161,7 +161,7 @@ npm install
 docker run -d --name life-pg -e POSTGRES_PASSWORD=dev -p 55432:5432 postgres:16-alpine
 export DATABASE_URL=postgresql://postgres:dev@localhost:55432/postgres
 npm run db:seed-sample          # 45 days of fake data (remove later: npm run db:seed-sample -- --clear)
-MUSE_API_KEY=devkey npm run dev # http://localhost:3001
+WRITE_API_KEY=devkey npm run dev # http://localhost:3001
 npm test
 ```
 
@@ -170,7 +170,7 @@ npm test
 | var | |
 |---|---|
 | `DATABASE_URL` | required. On Railway: `${{Postgres.DATABASE_URL}}` |
-| `MUSE_API_KEY` | required for Muse routes. A long random string, shared only with Muse |
+| `WRITE_API_KEY` | required for the logging routes. A long random string, shared only with Instinct (`MUSE_API_KEY` is still accepted as a fallback) |
 | `READ_API_KEY` | optional. Locks the dashboard routes (recommended, since this is health data) |
 | `APP_TIMEZONE` | default `America/Phoenix` |
 | `CORS_ORIGIN` | default `*`. Set it to the UI's URL in production |

@@ -1,4 +1,4 @@
-// Turns raw tracker events (shapes defined by Muse in
+// Turns raw tracker events (shapes defined in
 // tracker-api-contract.md) into one record per local calendar day that the
 // dashboard and analytics can use. Unknown shapes are kept but ignored.
 
@@ -157,7 +157,7 @@ export function interpret(events) {
         d.notes.push({ tracker: 'food', at: localIso(e.at), text: data.text });
       }
     } else if (e.tracker === 'skin') {
-      // Contract has no acne score yet; use `severity` (0-10) if Muse adds it.
+      // Acne score comes from `severity` (0-10) on skin events.
       const severity = num(data.severity);
       if (severity !== null) d.acne = Math.max(d.acne ?? 0, severity);
       if (data.kind === 'routine') d.skin.routines++;

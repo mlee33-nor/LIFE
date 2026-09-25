@@ -2,7 +2,7 @@
   "name": "lifestyle-dashboard-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "API for tracking lifestyle, eating, stomach pain and acne (Postgres + Muse write API)",
+  "description": "API for tracking lifestyle, eating, stomach pain and acne (Postgres + logging-agent write API)",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
