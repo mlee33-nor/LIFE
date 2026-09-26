@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const port = Number(process.env.PORT ?? process.env.UI_PORT ?? 3000);
 const backend = new URL(process.env.BACKEND_URL ?? 'https://api-production-2ace4.up.railway.app');
-const PROXIED = /^\/(api\/|log$|entries(\/|$)|submit$)/;
+const PROXIED = /^\/(api\/|log$|entries(\/|$)|submit$|sync(\/|$))/;
 
 const mime = {
   '.html': 'text/html; charset=utf-8',

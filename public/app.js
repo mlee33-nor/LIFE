@@ -19,18 +19,19 @@ const rawSamples = [
   ['2026-09-12',3,3,5,3,4,105,0,['toast','soup','chicken'],'']
 ];
 
-const sampleDays = rawSamples.map(([date, stomach_pain, acne, water, meals_logged, habits_done, hmwk_minutes, workout_minutes, foods, note]) => ({
-  date, stomach_pain, acne, water, meals_logged, habits_done, hmwk_minutes, workout_minutes,
+const previewZones = ['forehead','left cheek','chin','right cheek','jawline','nose','forehead'];
+const sampleDays = rawSamples.map(([date, stomach_pain, acne, water, meals_logged, habits_done, hmwk_minutes, workout_minutes, foods, note], index) => ({
+  date, stomach_pain, acne, acne_spots:acne, water, meals_logged, habits_done, hmwk_minutes, workout_minutes,
   work_minutes: 0, walk_minutes: workout_minutes ? 15 : 0, foods,
   meals: foods.map((text, index) => ({ at: `${date}T${12 + index}:00:00-07:00`, text })),
   habits: Object.fromEntries(['water','am_skincare','sunscreen','bedtime'].slice(0, Math.min(habits_done, 4)).map(habit => [habit, { count: 1, value: habit === 'water' ? water : null }])),
   sessions: [...(hmwk_minutes ? [{ activity:'hmwk', subject:'history', minutes:hmwk_minutes }] : []), ...(workout_minutes ? [{ activity:'workout', subject:null, minutes:workout_minutes }] : [])],
-  skin: { routines: habits_done > 3 ? 1 : 0, photos: 0, notes: [] },
+  skin: { routines: habits_done > 3 ? 1 : 0, photos: 0, notes: acne ? [{ at:`${date}T20:00:00-07:00`, kind:'note', text:`Breakout around ${previewZones[index % previewZones.length]}`, severity:acne }] : [] },
   notes: note ? [{ tracker:'food', at:`${date}T19:00:00-07:00`, text:note }] : [],
   event_count: meals_logged + habits_done + 1
 }));
 
-const state = { days:[], filtered:[], source:'sample', series:{pain:true, acne:true}, summary:null, foodInsights:null, lifestyleInsights:null };
+const state = { days:[], filtered:[], source:'sample', series:{pain:true, acne:true}, summary:null, foodInsights:null, lifestyleInsights:null, faceDate:null, faceZone:null };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const num = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -46,7 +47,7 @@ const noteText = day => (day.notes || []).map(note => typeof note === 'string' ?
 
 function normalizeDay(day) {
   return {
-    date:day.date, event_count:num(day.event_count), stomach_pain:maybeNum(day.stomach_pain), acne:maybeNum(day.acne),
+    date:day.date, event_count:num(day.event_count), stomach_pain:maybeNum(day.stomach_pain), acne:maybeNum(day.acne), acne_spots:maybeNum(day.acne_spots),
     water:maybeNum(day.water), meals_logged:num(day.meals_logged), habits_done:num(day.habits_done),
     work_minutes:num(day.work_minutes), hmwk_minutes:num(day.hmwk_minutes), workout_minutes:num(day.workout_minutes), walk_minutes:num(day.walk_minutes),
     foods:Array.isArray(day.foods) ? day.foods : [], meals:Array.isArray(day.meals) ? day.meals : [],
@@ -91,7 +92,7 @@ function applyRange() {
   renderAll();
 }
 
-function renderAll() { renderMetrics(); renderSignalsChart(); renderConnections(); renderRecent(); renderJournal($('#journal-search')?.value || ''); renderPatterns(); }
+function renderAll() { renderMetrics(); renderSignalsChart(); renderConnections(); renderFaceMap(); renderRecent(); renderJournal($('#journal-search')?.value || ''); renderPatterns(); }
 function splitPeriods(days) { const midpoint = Math.ceil(days.length / 2); return {current:days.slice(0,midpoint), previous:days.slice(midpoint)}; }
 function percentChange(current, previous) { return previous ? ((current - previous) / previous) * 100 : 0; }
 
@@ -177,6 +178,110 @@ function labelMetric(value) { return String(value).replaceAll('_',' ').replace(/
 function renderConnections() { $('#trigger-list').innerHTML=connectionItems().map(item=>`<div class="trigger-item"><span class="trigger-symbol">${item.icon}</span><div class="trigger-copy"><strong>${escapeHtml(labelMetric(item.label))}</strong><span>${escapeHtml(item.detail)}</span></div><div class="confidence"><strong>${escapeHtml(String(item.confidence))}</strong><span>confidence</span><div class="confidence-bar"><span style="width:${item.score}%"></span></div></div></div>`).join(''); }
 function signalBadge(value,label) { const missing=value===null||value===undefined,good=!missing&&value<=2,warn=!missing&&value>=5; return `<span class="signal-badge ${good?'good':warn?'warn':''}">${escapeHtml(label)}${label?' ':''}${missing?'—':value}</span>`; }
 function activityLabel(day) { const total=totalActivity(day); return total ? `Activity ${total}m` : '—'; }
+
+const FACE_ZONES = {
+  forehead: { label:'Forehead', x:100, y:65 },
+  left_cheek: { label:'Left cheek', x:68, y:122 },
+  right_cheek: { label:'Right cheek', x:132, y:122 },
+  nose: { label:'Nose', x:100, y:112 },
+  chin: { label:'Chin', x:100, y:171 },
+  left_jaw: { label:'Left jaw', x:73, y:157 },
+  right_jaw: { label:'Right jaw', x:127, y:157 },
+  left_temple: { label:'Left temple', x:61, y:88 },
+  right_temple: { label:'Right temple', x:139, y:88 }
+};
+
+function isoDay(date) {
+  const year=date.getFullYear(),month=String(date.getMonth()+1).padStart(2,'0'),day=String(date.getDate()).padStart(2,'0');
+  return `${year}-${month}-${day}`;
+}
+
+function faceWeekDays() {
+  const latest=toDate(state.days[0]?.date) || new Date();
+  return Array.from({length:7},(_,index)=>{
+    const date=new Date(latest); date.setDate(latest.getDate()-(6-index));
+    const key=isoDay(date);
+    return state.days.find(day=>day.date===key) || normalizeDay({date:key});
+  });
+}
+
+function normalizeFaceZone(value='') {
+  const text=String(value).toLowerCase().replace(/[-\s]+/g,'_');
+  const direct={brow:'forehead',t_zone:'forehead',left_jawline:'left_jaw',right_jawline:'right_jaw'};
+  if (FACE_ZONES[text]) return [text];
+  if (direct[text]) return [direct[text]];
+  return [];
+}
+
+function zonesFromText(value='') {
+  const text=String(value).toLowerCase(),zones=[];
+  if (/forehead|brow|t-zone|t zone/.test(text)) zones.push('forehead');
+  if (/left\s+(?:side\s+)?cheek/.test(text)) zones.push('left_cheek');
+  if (/right\s+(?:side\s+)?cheek/.test(text)) zones.push('right_cheek');
+  if (!/left\s+(?:side\s+)?cheek|right\s+(?:side\s+)?cheek/.test(text) && /cheeks/.test(text)) zones.push('left_cheek','right_cheek');
+  else if (!/left\s+(?:side\s+)?cheek|right\s+(?:side\s+)?cheek/.test(text) && /\bcheek\b/.test(text)) zones.push('left_cheek');
+  if (/\bnose\b|nostril/.test(text)) zones.push('nose');
+  if (/\bchin\b/.test(text)) zones.push('chin');
+  if (/left\s+(?:side\s+)?(?:jaw|jawline)/.test(text)) zones.push('left_jaw');
+  if (/right\s+(?:side\s+)?(?:jaw|jawline)/.test(text)) zones.push('right_jaw');
+  if (!/left\s+(?:side\s+)?(?:jaw|jawline)|right\s+(?:side\s+)?(?:jaw|jawline)/.test(text) && /jaw|jawline/.test(text)) zones.push('left_jaw','right_jaw');
+  if (/left\s+temple/.test(text)) zones.push('left_temple');
+  if (/right\s+temple/.test(text)) zones.push('right_temple');
+  if (!/left\s+temple|right\s+temple/.test(text) && /temples/.test(text)) zones.push('left_temple','right_temple');
+  return [...new Set(zones)];
+}
+
+function faceSpots(day) {
+  const observations=[...(day.skin?.notes || []),...((day.skin?.locations || []).map(location=>typeof location==='string'?{location}:{...location}))];
+  const grouped=new Map();
+  for (const observation of observations) {
+    const zones=[...normalizeFaceZone(observation.location || observation.zone || observation.area),...zonesFromText(observation.text || observation.note || '')];
+    const severity=clamp(num(observation.severity,day.acne || 1),1,10);
+    for (const zone of new Set(zones)) {
+      const current=grouped.get(zone) || {zone,count:0,severity:0,notes:[]};
+      current.count++; current.severity=Math.max(current.severity,severity);
+      if (observation.text || observation.note) current.notes.push(observation.text || observation.note);
+      grouped.set(zone,current);
+    }
+  }
+  return [...grouped.values()];
+}
+
+function severityClass(value) { return value >= 7 ? 'active' : value >= 4 ? 'moderate' : 'mild'; }
+
+function renderFaceMap() {
+  const week=faceWeekDays();
+  if (!state.faceDate || !week.some(day=>day.date===state.faceDate)) state.faceDate=week.at(-1).date;
+  const selected=week.find(day=>day.date===state.faceDate) || week.at(-1),spots=faceSpots(selected);
+  if (state.faceZone && !spots.some(spot=>spot.zone===state.faceZone)) state.faceZone=null;
+  $('#face-week').innerHTML=week.map(day=>{const date=toDate(day.date),logged=day.acne!==null || day.acne_spots!==null || (day.skin?.notes?.length || 0)>0;return `<button class="face-day ${day.date===selected.date?'active':''}" type="button" data-face-date="${day.date}" aria-pressed="${day.date===selected.date}"><span class="weekday">${date.toLocaleDateString('en-US',{weekday:'narrow'})}</span><strong>${date.getDate()}</strong><span class="day-severity ${logged?'logged':''}"></span></button>`;}).join('');
+  $('#face-hotspots').innerHTML=spots.map(spot=>{const zone=FACE_ZONES[spot.zone],radius=8+Math.min(spot.count,3)*1.5;return `<g class="face-hotspot ${severityClass(spot.severity)} ${state.faceZone===spot.zone?'selected':''}" data-face-zone="${spot.zone}" tabindex="0" role="button" aria-label="${zone.label}, severity ${spot.severity}, ${spot.count} ${spot.count===1?'entry':'entries'}"><circle class="hotspot-halo" cx="${zone.x}" cy="${zone.y}" r="${radius+6}"/><circle class="hotspot-core" cx="${zone.x}" cy="${zone.y}" r="${radius}"/><text x="${zone.x}" y="${zone.y+2}">${spot.count}</text></g>`;}).join('');
+  renderFaceDetails(selected,spots);
+  $$('.face-day').forEach(button=>button.addEventListener('click',()=>{state.faceDate=button.dataset.faceDate;state.faceZone=null;renderFaceMap();}));
+  $$('.face-hotspot').forEach(hotspot=>{
+    const select=()=>{state.faceZone=hotspot.dataset.faceZone;renderFaceMap();};
+    hotspot.addEventListener('click',select);hotspot.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
+  });
+}
+
+function renderFaceDetails(day,spots) {
+  const panel=$('#face-detail-panel'),date=toDate(day.date),selected=spots.find(spot=>spot.zone===state.faceZone);
+  if (selected) {
+    const zone=FACE_ZONES[selected.zone];
+    panel.innerHTML=`<p class="face-date">${date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</p><h3>${zone.label}</h3><p>${selected.notes.length?escapeHtml(selected.notes.join(' · ')):'Skin activity logged in this area.'}</p><div class="face-summary"><div><span>Severity</span><strong>${selected.severity}/10</strong></div><div><span>Entries</span><strong>${selected.count}</strong></div><div><span>Day total</span><strong>${day.acne ?? '—'}</strong></div></div><button class="text-button" id="clear-face-zone" type="button">← Back to day overview</button>`;
+    $('#clear-face-zone').addEventListener('click',()=>{state.faceZone=null;renderFaceMap();});
+    return;
+  }
+  if (!spots.length) {
+    const hasSkinData=day.acne!==null || day.acne_spots!==null;
+    const measure=[day.acne_spots!==null?`${day.acne_spots} visible ${day.acne_spots===1?'spot':'spots'}`:'',day.acne!==null?`severity ${day.acne}/10`:''].filter(Boolean).join(' and ');
+    panel.innerHTML=`<div class="face-empty"><span class="face-empty-icon">${hasSkinData?'○':'✓'}</span><p class="face-date">${date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</p><h3>${hasSkinData?'Location not logged':'No mapped activity'}</h3><p>${hasSkinData?`${measure} ${measure.includes(' and ')?'were':'was'} logged, but INSTINCT did not include a facial location.`:'No acne location was found in this day’s skin notes.'}</p></div>`;
+    return;
+  }
+  const peak=Math.max(...spots.map(spot=>spot.severity)),entries=spots.reduce((sum,spot)=>sum+spot.count,0);
+  panel.innerHTML=`<p class="face-date">${date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</p><h3>${spots.length} ${spots.length===1?'area':'areas'} mapped</h3><p>Tap a hotspot for its notes and severity. Locations come directly from INSTINCT’s skin descriptions.</p><div class="face-summary"><div><span>Day severity</span><strong>${day.acne ?? peak}/10</strong></div><div><span>Areas</span><strong>${spots.length}</strong></div><div><span>Entries</span><strong>${entries}</strong></div></div><div class="zone-list">${spots.map(spot=>`<button class="zone-row" type="button" data-zone-row="${spot.zone}"><i class="zone-color"></i><strong>${FACE_ZONES[spot.zone].label}</strong><span>${spot.severity}/10 · ${spot.count} ${spot.count===1?'entry':'entries'}</span></button>`).join('')}</div>`;
+  $$('[data-zone-row]',panel).forEach(button=>button.addEventListener('click',()=>{state.faceZone=button.dataset.zoneRow;renderFaceMap();}));
+}
 
 function renderRecent() {
   const days=state.filtered.slice(0,4),container=$('#recent-table'); if (!days.length) {container.innerHTML='<div class="empty-state">No INSTINCT entries yet.</div>';return;}

@@ -177,6 +177,29 @@
             </article>
           </div>
 
+          <article class="card face-map-card">
+            <div class="card-header face-map-header">
+              <div><p class="eyebrow">Weekly skin check</p><h2>Acne face map</h2><p>Select a day or tap a hotspot to see where activity was logged.</p></div>
+              <div class="face-map-legend" aria-label="Severity legend"><span><i class="face-dot mild"></i>Mild</span><span><i class="face-dot moderate"></i>Moderate</span><span><i class="face-dot active"></i>Active</span></div>
+            </div>
+            <div class="face-week" id="face-week" aria-label="Choose a day from this week"></div>
+            <div class="face-map-layout">
+              <div class="face-stage">
+                <svg class="face-figure" viewBox="0 0 200 220" role="img" aria-labelledby="face-map-title face-map-desc">
+                  <title id="face-map-title">Acne locations for the selected day</title>
+                  <desc id="face-map-desc">Front-facing outline with interactive acne hotspots.</desc>
+                  <path class="face-hair" d="M55 75C56 28 79 17 101 17c29 0 47 20 46 59-11-19-29-30-48-30-17 0-32 9-44 29Z"/>
+                  <path class="face-outline" d="M56 72c-3 17-1 54 7 75 8 23 24 48 37 49 14-1 30-26 38-49 7-21 10-58 6-75-9-22-25-34-44-34S65 50 56 72Z"/>
+                  <path class="face-detail" d="M76 91c7-4 14-4 21 0M103 91c7-4 14-4 21 0M100 92c-3 15-5 25-1 29 3 2 6 1 9 0M87 147c9 5 18 5 27 0"/>
+                  <circle class="face-eye" cx="86" cy="96" r="2.3"/><circle class="face-eye" cx="114" cy="96" r="2.3"/>
+                  <g id="face-hotspots"></g>
+                </svg>
+                <p class="face-orientation"><span>L</span>Mirror view<span>R</span></p>
+              </div>
+              <aside class="face-detail-panel" id="face-detail-panel" aria-live="polite"></aside>
+            </div>
+          </article>
+
           <article class="card recent-card">
             <div class="card-header compact">
               <div><p class="eyebrow">Journal</p><h2>Recent days</h2></div>
