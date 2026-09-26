@@ -5,6 +5,7 @@
 //   GET    /entries           raw events for one tracker
 //   DELETE /entries/:id       soft-delete a mistaken event
 //   GET/POST /submit          same, as a key-gated HTML form for browser agents
+//   POST   /sync/sheet        body = the sheet's "All events" tab as CSV; upserts it
 //
 // Dashboard routes (/api/*) for the UI — interpreted data and insights.
 //
@@ -21,11 +22,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPool, migrate, PgStore } from './db.js';
 import { handleForm } from './form.js';
+import { parseCsv, syncSheet } from './sheet.js';
 import { METRICS, TIMEZONE, ACTIVITIES, HABITS, localDate, localIso } from './interpret.js';
 import {
   checkApiKey,
   insertLog,
   listEntries,
+  readBody,
   readJson,
   softDelete,
   validateLog,
@@ -234,6 +237,15 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
     const url = new URL(req.url, 'http://localhost');
 
     try {
+      if (url.pathname === '/sync/sheet' && req.method === 'POST') {
+        if (!writeApiKey) throw new HttpError(503, 'WRITE_API_KEY is not configured on the server');
+        if (!checkApiKey(req, writeApiKey, url)) throw new HttpError(401, 'Missing or invalid API key');
+        const rows = parseCsv(await readBody(req, 5_000_000));
+        if (!rows.length || !('row_id' in rows[0])) throw new HttpError(400, 'Body must be the sheet CSV with a row_id column');
+        sendJson(res, 200, { ok: true, ...(await syncSheet(pool, rows)) });
+        return;
+      }
+
       if (url.pathname === '/submit' && (req.method === 'GET' || req.method === 'POST')) {
         await handleForm(req, res, { pool, store, writeApiKey });
         return;
