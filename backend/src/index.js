@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { createPool, migrate, PgStore } from './db.js';
 import { handleForm } from './form.js';
 import { parseCsv, syncSheet } from './sheet.js';
-import { fetchImage, getPhoto, readBuffer, savePhoto } from './photos.js';
+import { fetchImage, getPhoto, photoFromLink, readBuffer, savePhoto } from './photos.js';
 import { METRICS, TIMEZONE, ACTIVITIES, HABITS, localDate, localIso } from './interpret.js';
 import {
   checkApiKey,
@@ -39,8 +39,11 @@ import {
 } from './write.js';
 import {
   filterRange,
+  foodCompass,
   foodTriggers,
+  focusCurve,
   lifestyleCorrelations,
+  optimalBlueprint,
   summary,
   timeseries,
   FLARE_THRESHOLD,
@@ -223,6 +226,51 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
       };
     },
 
+    '/api/analytics/blueprint': async (params) => {
+      const state = await store.get();
+      const days = filterRange(state.daily, dateParam(params, 'from'), dateParam(params, 'to'));
+      return {
+        meta: meta(store, state),
+        ...optimalBlueprint(days.length ? days : state.daily),
+      };
+    },
+
+    '/api/analytics/food-compass': async (params) => {
+      const state = await store.get();
+      const days = filterRange(state.daily, dateParam(params, 'from'), dateParam(params, 'to'));
+      return {
+        meta: meta(store, state),
+        ...foodCompass(days.length ? days : state.daily),
+      };
+    },
+
+    '/api/analytics/focus-curve': async (params) => {
+      const state = await store.get();
+      const days = filterRange(state.daily, dateParam(params, 'from'), dateParam(params, 'to'));
+      return {
+        meta: meta(store, state),
+        ...focusCurve(days.length ? days : state.daily),
+      };
+    },
+
+    // Face photos for before/after comparison: grouped by day, each tagged
+    // with its angle (front/left/right) so the same angle can be compared.
+    '/api/skin/photos': async () => {
+      const state = await store.get();
+      const days = state.daily
+        .map((d) => ({
+          date: d.date,
+          spots: d.acne_spots,
+          photos: d.skin.photo_list.filter((p) => p.url),
+        }))
+        .filter((d) => d.photos.length);
+      return {
+        meta: meta(store, state),
+        angles: [...new Set(days.flatMap((d) => d.photos.map((p) => p.angle).filter(Boolean)))],
+        days,
+      };
+    },
+
     '/api/feed': async (params) => {
       const state = await store.get();
       const tracker = params.get('tracker');
@@ -257,7 +305,7 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         if (!checkApiKey(req, writeApiKey, url)) throw new HttpError(401, 'Missing or invalid API key');
         const rows = parseCsv(await readBody(req, 5_000_000));
         if (!rows.length || !('row_id' in rows[0])) throw new HttpError(400, 'Body must be the sheet CSV with a row_id column');
-        const result = await syncSheet(pool, rows);
+        const result = await syncSheet(pool, rows, { resolvePhoto: (link, label) => photoFromLink(pool, link, label) });
         await pool.query(
           `INSERT INTO sync_status (name, synced_at, result) VALUES ('sheet', now(), $1)
            ON CONFLICT (name) DO UPDATE SET synced_at = now(), result = EXCLUDED.result`,

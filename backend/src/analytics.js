@@ -296,3 +296,226 @@ export function timeseries(daily, { from, to, metrics = METRICS, smooth = 7 } = 
   }
   return { from: start, to: end, smooth, points };
 }
+
+// Reverse-engineers top peak days vs flare days into a tangible daily recipe.
+export function optimalBlueprint(daily) {
+  if (!daily || daily.length === 0) {
+    return {
+      has_data: false,
+      message: 'Need logged days to compute blueprint.',
+      targets: {
+        sleep_hours: { min: 7.5, optimal: 8.0 },
+        water_glasses: { min: 7, optimal: 8 },
+        habits_count: { min: 4, optimal: 6 },
+        study_cutoff_hour: '19:30',
+        walking_minutes: { min: 15, optimal: 30 }
+      },
+      contrasts: []
+    };
+  }
+
+  const scored = daily.map((d) => {
+    const pain = d.stomach_pain ?? 0;
+    const acne = d.acne ?? 0;
+    const headache = d.headache ?? 0;
+    const water = Math.min(d.water ?? 0, 8);
+    const sleep = Math.min(d.sleep_hours ?? 0, 8);
+    const habits = Math.min(d.habits_done ?? 0, 8);
+    const score = 100 - pain * 6 - acne * 4 - headache * 4 + water * 2.5 + sleep * 3 + habits * 2;
+    return { ...d, _score: score };
+  }).sort((a, b) => b._score - a._score);
+
+  const n = scored.length;
+  const peakCount = Math.max(1, Math.ceil(n * 0.25));
+  const flareCount = Math.max(1, Math.ceil(n * 0.25));
+  const peakDays = scored.slice(0, peakCount);
+  const flareDays = scored.slice(-flareCount);
+
+  const avgMetric = (days, key) => {
+    const vals = days.map((d) => d[key]).filter((v) => v !== null && v !== undefined && Number.isFinite(Number(v)));
+    return vals.length ? round(mean(vals), 1) : null;
+  };
+
+  const peakSleep = avgMetric(peakDays, 'sleep_hours') ?? 8.0;
+  const flareSleep = avgMetric(flareDays, 'sleep_hours') ?? 6.2;
+  const peakWater = avgMetric(peakDays, 'water') ?? 8.0;
+  const flareWater = avgMetric(flareDays, 'water') ?? 4.5;
+  const peakHabits = avgMetric(peakDays, 'habits_done') ?? 5.5;
+  const flareHabits = avgMetric(flareDays, 'habits_done') ?? 2.8;
+  const peakWalk = avgMetric(peakDays, 'walk_minutes') ?? 25;
+  const flareWalk = avgMetric(flareDays, 'walk_minutes') ?? 5;
+
+  const extractCutoff = (days) => {
+    const endMinutes = days.flatMap((d) => (d.sessions || []).filter((s) => s.activity === 'hmwk' || s.activity === 'work').map((s) => {
+      if (!s.end) return null;
+      const m = s.end.match(/T(\d{2}):(\d{2})/);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    })).filter(Boolean);
+    if (!endMinutes.length) return '19:30';
+    const p75 = endMinutes.sort((a, b) => a - b)[Math.floor(endMinutes.length * 0.75)];
+    const h = String(Math.floor(p75 / 60)).padStart(2, '0');
+    const min = String(Math.floor(p75 % 60)).padStart(2, '0');
+    return `${h}:${min}`;
+  };
+
+  const studyCutoff = extractCutoff(peakDays);
+
+  return {
+    has_data: true,
+    sample_days: n,
+    peak_days_count: peakDays.length,
+    flare_days_count: flareDays.length,
+    targets: {
+      sleep_hours: { min: round(Math.max(6.5, peakSleep - 0.5), 1), optimal: peakSleep },
+      water_glasses: { min: Math.max(6, Math.floor(peakWater)), optimal: Math.ceil(peakWater) },
+      habits_count: { min: Math.max(3, Math.floor(peakHabits)), optimal: Math.ceil(peakHabits) },
+      walking_minutes: { min: 15, optimal: Math.max(20, Math.round(peakWalk)) },
+      study_cutoff_hour: studyCutoff
+    },
+    contrasts: [
+      { factor: 'Sleep', peak: `${peakSleep} hrs`, flare: `${flareSleep} hrs`, delta: `+${round(peakSleep - flareSleep, 1)} hrs on best days` },
+      { factor: 'Water', peak: `${peakWater} glasses`, flare: `${flareWater} glasses`, delta: `+${round(peakWater - flareWater, 1)} glasses` },
+      { factor: 'Habits Completed', peak: `${peakHabits}`, flare: `${flareHabits}`, delta: `+${round(peakHabits - flareHabits, 1)} daily routines` },
+      { factor: 'Walking / Movement', peak: `${peakWalk} min`, flare: `${flareWalk} min`, delta: `+${round(peakWalk - flareWalk, 0)} min daily walk` }
+    ]
+  };
+}
+
+// Groups meals into Safe Baselines, Confirmed Triggers, and Watchlist.
+export function foodCompass(daily) {
+  const triggers = foodTriggers(daily, { minDays: 2 });
+  const allMeals = [...new Set(daily.flatMap((d) => d.foods || []))];
+  const byDate = new Map(daily.map((d) => [d.date, d]));
+
+  const foodStats = allMeals.map((food) => {
+    let eatenCount = 0;
+    let nextDayPainSum = 0;
+    let nextDayPainCount = 0;
+    let nextDayAcneSum = 0;
+    let nextDayAcneCount = 0;
+
+    for (const d of daily) {
+      if ((d.foods || []).includes(food)) {
+        eatenCount++;
+        const next1 = byDate.get(addDays(d.date, 1));
+        const next2 = byDate.get(addDays(d.date, 2));
+        if (next1 && next1.stomach_pain !== null) {
+          nextDayPainSum += next1.stomach_pain;
+          nextDayPainCount++;
+        }
+        if (next2 && next2.acne !== null) {
+          nextDayAcneSum += next2.acne;
+          nextDayAcneCount++;
+        }
+      }
+    }
+
+    const avgPain = nextDayPainCount ? nextDayPainSum / nextDayPainCount : 0;
+    const avgAcne = nextDayAcneCount ? nextDayAcneSum / nextDayAcneCount : 0;
+
+    return {
+      food,
+      eatenCount,
+      avgPain: round(avgPain, 1),
+      avgAcne: round(avgAcne, 1)
+    };
+  });
+
+  const safeFoods = foodStats
+    .filter((f) => f.eatenCount >= 2 && f.avgPain <= 1.5 && f.avgAcne <= 2.5)
+    .sort((a, b) => b.eatenCount - a.eatenCount);
+
+  const confirmedTriggers = [];
+  const watchlist = [];
+
+  for (const symptom of ['stomach_pain', 'acne', 'headache']) {
+    const list = triggers[symptom]?.foods || [];
+    for (const item of list) {
+      if (item.difference >= 1.2 && item.days_eaten >= 2) {
+        confirmedTriggers.push({
+          food: item.food,
+          symptom,
+          symptom_label: symptom === 'stomach_pain' ? 'Stomach discomfort' : symptom === 'acne' ? 'Skin flare' : 'Headache',
+          difference: item.difference,
+          lag_days: item.lag_days,
+          confidence: item.confidence,
+          days_eaten: item.days_eaten
+        });
+      } else if (item.difference > 0.4) {
+        watchlist.push({
+          food: item.food,
+          symptom,
+          difference: item.difference,
+          days_eaten: item.days_eaten
+        });
+      }
+    }
+  }
+
+  const uniqueTriggers = [...new Map(confirmedTriggers.map((t) => [t.food, t])).values()]
+    .sort((a, b) => b.difference - a.difference);
+
+  return {
+    safe_foods: safeFoods,
+    confirmed_triggers: uniqueTriggers,
+    watchlist: [...new Map(watchlist.map((w) => [w.food, w])).values()].slice(0, 5)
+  };
+}
+
+// Evaluates cognitive session stamina, peak hours, and study duration distribution.
+export function focusCurve(daily) {
+  const hourly = Array.from({ length: 24 }, (_, hour) => ({ hour, minutes: 0, sessions: 0 }));
+  const sessions = daily.flatMap((d) => d.sessions || []);
+
+  let shortCount = 0;
+  let optimalCount = 0;
+  let longCount = 0;
+
+  for (const s of sessions) {
+    const mins = Number(s.minutes) || 0;
+    if (mins <= 0) continue;
+    if (mins < 45) shortCount++;
+    else if (mins <= 75) optimalCount++;
+    else longCount++;
+
+    if (s.start) {
+      const match = s.start.match(/T(\d{2}):/);
+      if (match) {
+        const hour = Number(match[1]);
+        if (hour >= 0 && hour < 24) {
+          hourly[hour].minutes += mins;
+          hourly[hour].sessions += 1;
+        }
+      }
+    }
+  }
+
+  let maxWindowMins = 0;
+  let peakStart = 10;
+  for (let h = 6; h <= 18; h++) {
+    const windowMins = hourly.slice(h, h + 4).reduce((sum, item) => sum + item.minutes, 0);
+    if (windowMins > maxWindowMins) {
+      maxWindowMins = windowMins;
+      peakStart = h;
+    }
+  }
+
+  const formatHour = (h) => `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`;
+
+  return {
+    peak_window: {
+      start_hour: peakStart,
+      end_hour: peakStart + 4,
+      label: `${formatHour(peakStart)} – ${formatHour(peakStart + 4)}`,
+      total_minutes: maxWindowMins
+    },
+    stamina_breakdown: {
+      under_45m: shortCount,
+      optimal_45_to_75m: optimalCount,
+      extended_over_75m: longCount
+    },
+    advisory: longCount > optimalCount
+      ? 'More than half your study blocks exceed 75 minutes. Consider 5-minute movement resets to sustain focus.'
+      : 'Great study block rhythm! Most sessions stay in the high-retention 45–75 minute zone.'
+  };
+}

@@ -58,20 +58,35 @@ const STOPWORDS = new Set(
 
 // Rough keyword extraction from free-text meals: "Chicken burrito w/ cheese"
 // -> ["chicken", "burrito", "cheese"].
+// Food items from a meal description, kept whole so names like "Dutch Bros
+// Golden Eagle" stay one item: "chicken burrito with cheese and salsa" ->
+// ["chicken burrito", "cheese", "salsa"]. Filler words at the edges
+// ("had a", "for lunch") are dropped and the last word is singularized.
 export function foodKeywords(text) {
   if (typeof text !== 'string') return [];
-  const words = text
+  const items = text
     .toLowerCase()
-    .replace(/w\//g, ' ')
-    .split(/[^a-z]+/)
-    .filter((w) => w.length >= 3 && !STOPWORDS.has(w))
-    .map(singular);
-  return [...new Set(words)];
+    .replace(/\([^)]*\)/g, ' ')               // "(half bowl)" quantities
+    .replace(/w\//g, ' with ')
+    .split(/\s*(?:[,;+&|\n]|\band\b|\bwith\b|\bplus\b)\s*/)
+    .map(foodItem)
+    .filter(Boolean);
+  return [...new Set(items)];
+}
+
+// Normalizes one item name: lowercase, trimmed filler, singular last word.
+export function foodItem(name) {
+  const words = String(name ?? '').toLowerCase().replace(/[^a-z0-9'’ -]+/g, ' ').split(/\s+/).filter(Boolean);
+  while (words.length && (STOPWORDS.has(words[0]) || /^\d+$/.test(words[0]))) words.shift();
+  while (words.length && STOPWORDS.has(words.at(-1))) words.pop();
+  if (!words.length || words.join('').length < 3) return null;
+  words[words.length - 1] = singular(words.at(-1));
+  return words.join(' ');
 }
 
 // Crude plural -> singular so "fries"/"fry" and "eggs"/"egg" match.
 function singular(w) {
-  if (w.length <= 3 || w.endsWith('ss')) return w;
+  if (w.length <= 3 || w.endsWith('ss') || w === 'bros' || w === 'fries') return w; // "Dutch Bros" isn't a plural
   if (w.endsWith('ies')) return `${w.slice(0, -3)}y`;
   if (/(oes|ches|shes|xes)$/.test(w)) return w.slice(0, -2);
   if (w.endsWith('s')) return w.slice(0, -1);
@@ -203,7 +218,9 @@ export function interpret(events) {
       if (data.kind === 'meal') {
         d.meals.push({ at: localIso(e.at), text: data.text ?? '' });
         d.meals_logged++;
-        for (const k of foodKeywords(data.text)) if (!d.foods.includes(k)) d.foods.push(k);
+        // Structured item names (from the sheet) beat parsing free text.
+        const items = Array.isArray(data.items) ? data.items.map(foodItem).filter(Boolean) : foodKeywords(data.text);
+        for (const k of items) if (!d.foods.includes(k)) d.foods.push(k);
       } else if (data.kind === 'note' && data.text) {
         d.notes.push({ tracker: 'food', at: localIso(e.at), text: data.text });
       }
@@ -225,7 +242,10 @@ export function interpret(events) {
       if (data.kind === 'routine') d.skin.routines++;
       else if (data.kind === 'photo') {
         d.skin.photos++;
-        d.skin.photo_list.push({ at: localIso(e.at), label: data.text ?? data.label ?? null, url: data.url ?? null, photo_id: data.photo_id ?? null, external_ref: data.photo_ref ?? null });
+        const label = data.text ?? data.label ?? null;
+        const angle = String(label ?? '').toLowerCase().match(/\b(front|left|right)\b/)?.[1] ?? null;
+        d.skin.photo_list.push({ at: localIso(e.at), label, angle, url: data.url ?? null, photo_id: data.photo_id ?? null, external_ref: data.photo_ref ?? null });
+        continue; // photos are listed in photo_list, not repeated as notes
       }
       if (data.text) d.skin.notes.push({ at: localIso(e.at), kind: data.kind ?? null, text: data.text });
     }

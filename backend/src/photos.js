@@ -39,28 +39,44 @@ export async function fetchImage(url) {
   return { buffer, contentType: type };
 }
 
-// Saves a photo and its skin event. Re-uploading the same image returns the
-// existing photo instead of duplicating it.
-export async function savePhoto(pool, { buffer, contentType, label = null, at = null, sourceUrl = null }) {
+// Stores image bytes (deduplicated by content). Returns { id, url, duplicate }.
+export async function storePhotoBytes(db, { buffer, contentType, label = null, sourceUrl = null }) {
   const type = String(contentType ?? '').split(';')[0].trim().toLowerCase();
   if (!IMAGE_TYPE.test(type)) throw new ValidationError([`photo must be an image (jpeg, png, webp, gif, heic), got ${type || 'nothing'}`]);
   if (!buffer?.length) throw new ValidationError(['photo is empty']);
   const sha256 = createHash('sha256').update(buffer).digest('hex');
-  const atSql = at ? parseIso(at, 'at') : null;
+  const { rows } = await db.query(
+    `INSERT INTO photos (sha256, content_type, bytes, label, source_url) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (sha256) DO UPDATE SET source_url = COALESCE(photos.source_url, EXCLUDED.source_url)
+     RETURNING id, (xmax <> 0) AS duplicate`,
+    [sha256, type, buffer, label, sourceUrl]
+  );
+  return { id: String(rows[0].id), url: `/api/photos/${sha256}`, duplicate: rows[0].duplicate };
+}
 
+// For sheet rows that link to an image: reuse the stored copy if this link
+// was downloaded before, otherwise download and store it.
+export async function photoFromLink(db, url, label) {
+  const { rows } = await db.query('SELECT id, sha256 FROM photos WHERE source_url = $1', [url]);
+  if (rows.length) return { id: String(rows[0].id), url: `/api/photos/${rows[0].sha256}` };
+  const image = await fetchImage(url);
+  return storePhotoBytes(db, { ...image, label, sourceUrl: url });
+}
+
+// Saves an uploaded photo and a skin event for it. Re-uploading the same
+// image returns the existing photo instead of duplicating it.
+export async function savePhoto(pool, { buffer, contentType, label = null, at = null, sourceUrl = null }) {
+  const atSql = at ? parseIso(at, 'at') : null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const existing = await client.query('SELECT id FROM photos WHERE sha256 = $1', [sha256]);
-    if (existing.rows.length) {
+    const stored = await storePhotoBytes(client, { buffer, contentType, label, sourceUrl });
+    if (stored.duplicate) {
       await client.query('ROLLBACK');
-      return { id: String(existing.rows[0].id), url: `/api/photos/${sha256}`, duplicate: true };
+      return stored;
     }
-    const { rows } = await client.query(
-      'INSERT INTO photos (sha256, content_type, bytes, label, source_url) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [sha256, type, buffer, label, sourceUrl]
-    );
-    const id = String(rows[0].id);
+    const id = stored.id;
+    const sha256 = stored.url.split('/').pop();
     const data = { kind: 'photo', photo_id: id, url: `/api/photos/${sha256}`, text: label, severity: null };
     const params = [JSON.stringify(data)];
     if (atSql) params.push(atSql.param);
@@ -69,7 +85,7 @@ export async function savePhoto(pool, { buffer, contentType, label = null, at = 
       params
     );
     await client.query('COMMIT');
-    return { id, url: `/api/photos/${sha256}`, duplicate: false };
+    return stored;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

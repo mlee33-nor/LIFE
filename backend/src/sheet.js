@@ -42,6 +42,19 @@ export function parseCsv(text) {
   return body.map((r) => Object.fromEntries(keys.map((k, i) => [k, (r[i] ?? '').trim()])));
 }
 
+// Direct image link for a photo row: the photo_url column, or source_url
+// inside a JSON photo_reference.
+function photoLink(row) {
+  if (/^https?:\/\//.test(row.photo_url ?? '')) return row.photo_url.trim();
+  try {
+    const ref = JSON.parse(row.photo_reference);
+    if (/^https?:\/\//.test(ref?.source_url ?? '')) return ref.source_url;
+  } catch {
+    // not JSON
+  }
+  return null;
+}
+
 const num = (v) => (v !== '' && v != null && Number.isFinite(Number(v)) ? Number(v) : null);
 const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 const bool = (v) => (/^true$/i.test(v) ? true : /^false$/i.test(v) ? false : null);
@@ -125,8 +138,10 @@ function mapSkinRow(row, at) {
     add('skin', { kind: 'zone_spots', zone: zoneId(row.label.split(':')[1]), count: num(row.value), text: row.notes || null });
   } else if (label === 'visible inflamed spots' && num(row.value) !== null) {
     add('skin', { kind: 'spots', count: num(row.value), text: row.notes || null });
-  } else if (row.photo_reference || row.unit === 'photo') {
-    add('skin', { kind: 'photo', text: row.label, photo_ref: row.photo_reference || null });
+  } else if (row.photo_url || row.photo_reference || row.unit === 'photo') {
+    // photo_url is a direct image link the sync downloads and stores; the
+    // older photo_reference is often a private Instinct link (or JSON).
+    add('skin', { kind: 'photo', text: row.label, source_url: photoLink(row), photo_ref: row.photo_url ? null : row.photo_reference || null });
   } else {
     const value = yes === true ? 'yes' : yes === false ? 'no' : row.value;
     add('skin', { kind: 'note', text: [row.label, value].filter(Boolean).join(': '), severity: null });
@@ -151,7 +166,7 @@ function mapFoodRows(rows) {
     const first = items[0];
     const at = atFor(first);
     const text = items.map((r) => [r.label, r.value].filter(Boolean).join(' (') + (r.value ? ')' : '')).join(', ');
-    out.push({ key: `meal:${mealId}`, tracker: 'food', at, data: { kind: 'meal', text, pain: null, meal_id: mealId } });
+    out.push({ key: `meal:${mealId}`, tracker: 'food', at, data: { kind: 'meal', text, items: items.map((r) => r.label).filter(Boolean), pain: null, meal_id: mealId } });
 
     const pained = items.filter((r) => r.outcome === 'pain reported');
     if (pained.length) {
@@ -198,7 +213,11 @@ export function mapSheetRows(rows) {
 function topic(e) {
   const d = e.data ?? {};
   const kind = d.kind === 'miss' ? 'habit' : d.kind ?? 'unknown';
-  const detail = d.kind === 'session' ? d.activity : ['habit', 'miss'].includes(d.kind) ? d.habit : '';
+  // Photos never replace each other; only the same stored image dedupes.
+  const detail = d.kind === 'session' ? d.activity
+    : ['habit', 'miss'].includes(d.kind) ? d.habit
+    : d.kind === 'photo' ? (d.url ?? d.source_url ?? d.sheet_row_id ?? Math.random())
+    : '';
   return `${e.tracker}|${kind}|${detail ?? ''}`;
 }
 
@@ -217,8 +236,21 @@ const MAX_REMOVAL_SHARE = 0.5;
 
 // Upserts mapped sheet events by sheet_row_id and soft-deletes sheet events
 // whose rows are gone from the sheet. Returns counts.
-export async function syncSheet(pool, rows) {
+export async function syncSheet(pool, rows, { resolvePhoto } = {}) {
   const events = mapSheetRows(rows);
+  // Download linked photos (once each) and point the events at the stored copy.
+  const photoErrors = [];
+  if (resolvePhoto) {
+    for (const e of events) {
+      if (e.data.kind !== 'photo' || !e.data.source_url) continue;
+      try {
+        const photo = await resolvePhoto(e.data.source_url, e.data.text);
+        Object.assign(e.data, { url: photo.url, photo_id: photo.id });
+      } catch (err) {
+        photoErrors.push(`${e.data.sheet_row_id}: ${err.message}`);
+      }
+    }
+  }
   // An empty mapping would make "NOT (id = ANY('{}'))" match every row.
   if (events.length === 0) return { rows: rows.length, events: 0, removed: 0, skipped_removal: 'no valid rows in sheet' };
   const client = await pool.connect();
@@ -255,7 +287,12 @@ export async function syncSheet(pool, rows) {
       ));
     }
     await client.query('COMMIT');
-    return { rows: rows.length, events: upserted, removed, ...(skipped && { skipped_removal: skipped }) };
+    return {
+      rows: rows.length, events: upserted, removed,
+      photos: events.filter((e) => e.data.kind === 'photo' && e.data.url).length,
+      ...(photoErrors.length && { photo_errors: photoErrors }),
+      ...(skipped && { skipped_removal: skipped }),
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

@@ -4,9 +4,11 @@ import { foodKeywords, interpret, localDate, localIso } from '../src/interpret.j
 
 const ev = (id, tracker, at, data) => ({ id: String(id), tracker, at: new Date(at), data });
 
-test('foodKeywords strips filler words and plurals', () => {
-  assert.deepEqual(foodKeywords('Chicken burrito w/ cheese and fries'), ['chicken', 'burrito', 'cheese', 'fry']);
+test('foodKeywords keeps whole items and strips filler, numbers and plurals', () => {
+  assert.deepEqual(foodKeywords('Chicken burrito w/ cheese and fries'), ['chicken burrito', 'cheese', 'fries']);
   assert.deepEqual(foodKeywords('2 eggs, potatoes, sandwiches'), ['egg', 'potato', 'sandwich']);
+  assert.deepEqual(foodKeywords('Dutch Bros Golden Eagle'), ['dutch bros golden eagle']);
+  assert.deepEqual(foodKeywords('Panda Express (half bowl of rice)'), ['panda express']);
   assert.deepEqual(foodKeywords(null), []);
 });
 

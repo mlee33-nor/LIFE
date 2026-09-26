@@ -150,3 +150,15 @@ test('any homework subject is kept, and study goals show progress', () => {
   assert.equal(d.xp, 20);
   assert.deepEqual(d.goals, [{ label: 'Calculus homework', subject: 'calculus', target_minutes: 120, done_minutes: 37, complete: false }]);
 });
+
+test('a directly uploaded photo does not hide the sheet photos from that day', () => {
+  const at = new Date('2026-09-01T12:00:00-07:00');
+  const events = [
+    { tracker: 'skin', at, data: { kind: 'photo', text: 'Face photo front', url: '/api/photos/aaa', source: 'sheet' } },
+    { tracker: 'skin', at, data: { kind: 'photo', text: 'Face photo left', url: '/api/photos/bbb', source: 'sheet' } },
+    { tracker: 'skin', at, data: { kind: 'photo', text: 'Face photo left', url: '/api/photos/bbb' } }, // same image, uploaded
+    { tracker: 'skin', at, data: { kind: 'photo', text: 'Close-up', url: '/api/photos/ccc' } },
+  ];
+  const kept = preferDirectEntries(events, localDate).map((e) => e.data.url);
+  assert.deepEqual(kept, ['/api/photos/aaa', '/api/photos/bbb', '/api/photos/ccc']);
+});

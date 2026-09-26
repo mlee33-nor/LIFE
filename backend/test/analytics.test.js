@@ -87,3 +87,59 @@ test('days_since_last_log uses the Phoenix date, not UTC', () => {
     Date.now = realNow;
   }
 });
+
+test('optimalBlueprint extracts targets and contrasts between peak and flare days', async () => {
+  const { optimalBlueprint } = await import('../src/analytics.js');
+  const days = [];
+  for (let i = 0; i < 20; i++) {
+    const isPeak = i < 10;
+    days.push(day(addDays('2026-09-01', i), {
+      stomach_pain: isPeak ? 1 : 6,
+      acne: isPeak ? 1 : 5,
+      sleep_hours: isPeak ? 8.5 : 6.0,
+      water: isPeak ? 8 : 4,
+      habits_done: isPeak ? 6 : 2,
+      walk_minutes: isPeak ? 30 : 0,
+      sessions: isPeak
+        ? [{ activity: 'hmwk', minutes: 45, start: `${addDays('2026-09-01', i)}T14:00:00-07:00`, end: `${addDays('2026-09-01', i)}T14:45:00-07:00` }]
+        : [{ activity: 'hmwk', minutes: 120, start: `${addDays('2026-09-01', i)}T21:00:00-07:00`, end: `${addDays('2026-09-01', i)}T23:00:00-07:00` }],
+    }));
+  }
+  const bp = optimalBlueprint(days);
+  assert.equal(bp.has_data, true);
+  assert.ok(bp.targets.sleep_hours.optimal >= 8.0);
+  assert.ok(bp.targets.water_glasses.optimal >= 7);
+  assert.ok(bp.contrasts.length >= 3);
+  assert.equal(optimalBlueprint([]).has_data, false);
+});
+
+test('foodCompass groups safe baseline foods and confirmed triggers', async () => {
+  const { foodCompass } = await import('../src/analytics.js');
+  const days = [];
+  for (let i = 0; i < 15; i++) {
+    const dairy = i % 2 === 0;
+    days.push(day(addDays('2026-09-01', i), {
+      foods: dairy ? ['cheese'] : ['oatmeal'],
+      stomach_pain: i > 0 && (i - 1) % 2 === 0 ? 7 : 0,
+    }));
+  }
+  const fc = foodCompass(days);
+  assert.ok(fc.safe_foods.some((f) => f.food === 'oatmeal'));
+  assert.ok(fc.confirmed_triggers.some((t) => t.food === 'cheese'));
+});
+
+test('focusCurve computes peak window and stamina breakdown', async () => {
+  const { focusCurve } = await import('../src/analytics.js');
+  const days = [
+    day('2026-09-01', {
+      sessions: [
+        { activity: 'hmwk', minutes: 50, start: '2026-09-01T10:00:00-07:00', end: '2026-09-01T10:50:00-07:00' },
+        { activity: 'work', minutes: 90, start: '2026-09-01T11:00:00-07:00', end: '2026-09-01T12:30:00-07:00' },
+      ],
+    }),
+  ];
+  const fc = focusCurve(days);
+  assert.ok(fc.peak_window.label);
+  assert.equal(fc.stamina_breakdown.optimal_45_to_75m, 1);
+  assert.equal(fc.stamina_breakdown.extended_over_75m, 1);
+});
