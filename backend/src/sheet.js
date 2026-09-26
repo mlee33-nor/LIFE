@@ -8,7 +8,6 @@
 // onset_minutes_approx, source_message_ids, photo_reference, notes
 
 const ACTIVITY = { homework: 'hmwk', work: 'work', workout: 'workout', walk: 'walk', rest: 'rest', social: 'social' };
-const SUBJECTS = ['history', 'science', 'math', 'english'];
 const HABIT_ALIASES = { room_cleaned: 'room_clean', skin_am: 'am_skincare', skin_pm: 'pm_skincare', breakfast: 'morning_ritual' };
 const SKIN_ROUTINES = { 'am routine': 'am_skincare', 'pm routine': 'pm_skincare', sunscreen: 'sunscreen' };
 // Skin-tab rows already covered by Life-tab rows (sessions, wake, bedtime) or
@@ -67,7 +66,9 @@ function mapLifeRow(row, at) {
     add('', { kind: 'wake', text: row.notes || null });
   } else if (ACTIVITY[category] && ['start', 'end', 'duration'].includes(row.event)) {
     const activity = ACTIVITY[category];
-    const subject = SUBJECTS.includes(label.toLowerCase()) ? label.toLowerCase() : null;
+    // Homework labels are the subject ("History", "Calculus"); other
+    // activities' labels are descriptions ("AI work", "Allison").
+    const subject = activity === 'hmwk' && label ? label.toLowerCase() : null;
     const minutes = num(row.minutes_confirmed) ?? num(row.minutes_reported);
     if (row.event === 'end' || row.event === 'duration') {
       // End/duration rows carry the confirmed minutes; the sheet pairs start/end.
@@ -84,6 +85,12 @@ function mapLifeRow(row, at) {
     add('', { kind: 'habit', habit: 'bedtime', value: null, text: row.status || null });
   } else if (category === 'symptom' && /headache/i.test(label)) {
     add('', { kind: 'headache', severity: null, text: row.notes || null });
+  } else if (category === 'study_goal') {
+    add('', {
+      kind: 'goal', label: label || null,
+      subject: label ? label.toLowerCase().replace(/\s*homework$/, '') : null,
+      target_minutes: num(row.minutes_reported), text: row.value || null,
+    });
   } else if (category === 'emotion') {
     add('', { kind: 'mood', text: row.value || label, note: row.notes || null });
   } else {

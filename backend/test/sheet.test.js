@@ -127,3 +127,15 @@ test('session labels (e.g. who you were with) and social minutes come through', 
   assert.equal(d2.work_minutes, 20);
   assert.equal(d2.sessions[0].label, 'RSA Software improvements');
 });
+
+test('any homework subject is kept, and study goals show progress', () => {
+  const rows = csv(
+    'l-g,2026-09-01,16:21,America/Phoenix,Life,study_goal,study_goal,Calculus homework,120m target,,,in_progress,,,120,37,0,,,,,',
+    'l-cs,2026-09-01,17:41,America/Phoenix,Life,homework,start,Calculus,,,,reported_closed,2026-09-01 17:41,2026-09-01 18:18,37,37,20,,,,,',
+    'l-ce,2026-09-01,18:18,America/Phoenix,Life,homework,end,Calculus,,,,reported_end,2026-09-01 17:41,2026-09-01 18:18,37,37,0,,,,,',
+  );
+  const d = interpret(toEvents(mapSheetRows(rows))).daily[0];
+  assert.deepEqual(d.hmwk_by_subject, { calculus: 37 });
+  assert.equal(d.xp, 20);
+  assert.deepEqual(d.goals, [{ label: 'Calculus homework', subject: 'calculus', target_minutes: 120, done_minutes: 37, complete: false }]);
+});

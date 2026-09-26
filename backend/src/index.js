@@ -132,10 +132,23 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
 
   // --- Dashboard routes -----------------------------------------------
 
+  // When the Google Sheet last pushed, and whether that's recent enough.
+  async function sheetSyncStatus() {
+    const { rows } = await pool.query(`SELECT synced_at, result FROM sync_status WHERE name = 'sheet'`);
+    if (!rows.length) return { last_synced_at: null, healthy: false, note: 'sheet has never synced' };
+    const minutes = Math.round((Date.now() - rows[0].synced_at.getTime()) / 60000);
+    return {
+      last_synced_at: localIso(rows[0].synced_at),
+      minutes_ago: minutes,
+      healthy: minutes <= 15,
+      ...rows[0].result,
+    };
+  }
+
   const routes = {
     '/api/health': async () => {
       try {
-        return { ok: true, ...meta(store, await store.get()) };
+        return { ok: true, ...meta(store, await store.get()), sheet_sync: await sheetSyncStatus() };
       } catch (err) {
         return { ok: false, error: err.message };
       }
@@ -242,7 +255,13 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         if (!checkApiKey(req, writeApiKey, url)) throw new HttpError(401, 'Missing or invalid API key');
         const rows = parseCsv(await readBody(req, 5_000_000));
         if (!rows.length || !('row_id' in rows[0])) throw new HttpError(400, 'Body must be the sheet CSV with a row_id column');
-        sendJson(res, 200, { ok: true, ...(await syncSheet(pool, rows)) });
+        const result = await syncSheet(pool, rows);
+        await pool.query(
+          `INSERT INTO sync_status (name, synced_at, result) VALUES ('sheet', now(), $1)
+           ON CONFLICT (name) DO UPDATE SET synced_at = now(), result = EXCLUDED.result`,
+          [{ ...result, via: url.searchParams.get('via') ?? 'manual' }]
+        );
+        sendJson(res, 200, { ok: true, ...result });
         return;
       }
 

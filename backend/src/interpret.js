@@ -107,6 +107,7 @@ function emptyDay(date) {
     sessions: [],
     ...Object.fromEntries(ACTIVITIES.map((a) => [`${a}_minutes`, 0])),
     hmwk_by_subject: {},
+    goals: [],
     skin: { routines: 0, photos: 0, notes: [] },
     notes: [],
   };
@@ -175,6 +176,10 @@ export function interpret(events) {
         if (hours !== null && hours > 0 && hours <= MAX_SLEEP_HOURS) d.sleep_hours = Math.round(hours * 100) / 100;
       }
       lastBedtime = null;
+    } else if (e.tracker === 'life' && data.kind === 'goal') {
+      // Latest version of a goal wins; progress is filled in below.
+      d.goals = d.goals.filter((g) => g.label !== data.label);
+      d.goals.push({ label: data.label ?? null, subject: data.subject ?? null, target_minutes: num(data.target_minutes) });
     } else if (e.tracker === 'life' && data.kind === 'headache') {
       // Unscored reports are listed but don't set the 0-10 score.
       const severity = num(data.severity);
@@ -215,6 +220,10 @@ export function interpret(events) {
 
   const daily = [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
   for (const d of daily) {
+    for (const g of d.goals) {
+      g.done_minutes = g.subject ? (d.hmwk_by_subject[g.subject] ?? 0) : null;
+      g.complete = g.target_minutes != null && g.done_minutes != null && g.done_minutes >= g.target_minutes;
+    }
     d.habits_done = Object.keys(d.habits).length;
     if (d.sleep_hours === null && d.reported_sleep_hours != null) d.sleep_hours = d.reported_sleep_hours;
     delete d.reported_sleep_hours;

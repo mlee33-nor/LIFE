@@ -36,3 +36,11 @@ DROP TRIGGER IF EXISTS events_notify_trg ON events;
 CREATE TRIGGER events_notify_trg
   AFTER INSERT OR UPDATE OR DELETE ON events
   FOR EACH ROW EXECUTE FUNCTION events_notify();
+
+-- Last result of each sync source (e.g. the Google Sheet push), so the
+-- dashboard can show whether syncing is healthy.
+CREATE TABLE IF NOT EXISTS sync_status (
+  name       TEXT PRIMARY KEY,
+  synced_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  result     JSONB NOT NULL DEFAULT '{}'::jsonb
+);
