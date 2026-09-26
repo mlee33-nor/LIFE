@@ -1,5 +1,6 @@
 // server.mjs proxies /api/* to the backend, so the API is same-origin by default.
 import { renderLifeAnalytics } from './life.js';
+import { loadSkinPhotos } from './photos.js';
 const API_BASE = window.SOMA_API_BASE ?? '';
 const API_KEY = window.SOMA_API_KEY ?? localStorage.getItem('soma-api-key') ?? '';
 
@@ -111,6 +112,7 @@ async function loadData({announce = false} = {}) {
   }
   applyRange();
   updateDataStatus();
+  loadSkinPhotos();
   if (announce) showToast(state.source === 'api' ? 'INSTINCT data synced' : 'Preview data refreshed');
 }
 
