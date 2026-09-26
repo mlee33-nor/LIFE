@@ -17,6 +17,7 @@
     />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/play.css" />
+    <link rel="stylesheet" href="/replay.css" />
   </head>
   <body>
     <div class="app-shell">
@@ -98,9 +99,37 @@
         <section class="overview-panel" id="overview" data-panel="overview">
           <section id="life-analytics" class="card life-analytics" aria-label="Daily time analytics"></section>
           <section class="quest-board" aria-labelledby="quest-title">
-            <div class="quest-intro"><span class="game-tag">PLAYER ONE · YOUR DAILY ADVENTURE</span><h2 id="quest-title">Little wins.<br>Big main-character energy.</h2><p>Show up for yourself. Every check-in counts.</p><div id="quest-progress" class="quest-progress"></div></div>
+            <div class="quest-intro"><span class="game-tag">PLAYER ONE · YOUR DAILY ADVENTURE</span><h2 id="quest-title">Little wins.<br>Big main-character energy.</h2><p>Show up for yourself. Every check-in counts.</p><div id="quest-progress" class="quest-progress"></div><div id="power-move" class="power-move-banner" role="region" aria-label="Today's power move"></div></div>
             <div class="quest-side"><div class="quest-heading"><h3>Daily side quests</h3><span id="quest-date"></span></div><div id="daily-quests"></div><p class="quest-footnote">Completed from your logs. No points lost for a tough day.</p></div>
           </section>
+
+          <article class="card blueprint-card" id="blueprint-card" aria-label="Peak Day Blueprint">
+            <div class="blueprint-header">
+              <div class="blueprint-title-wrap">
+                <span class="blueprint-kicker">DECISION INTELLIGENCE · REVERSE-ENGINEERED</span>
+                <h2>The Optimal Day Blueprint</h2>
+                <p id="blueprint-subtitle">Targets extracted from your top 25% highest-energy, symptom-free days.</p>
+              </div>
+              <div class="blueprint-actions">
+                <button class="secondary-button" id="blueprint-toggle-contrast" type="button" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" style="width:15px;height:15px;"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+                  <span>Peak vs Flare Contrast</span>
+                </button>
+              </div>
+            </div>
+            <div class="blueprint-grid" id="blueprint-targets-grid"></div>
+            <div class="blueprint-contrast-panel" id="blueprint-contrast-panel" hidden>
+              <div class="contrast-header">
+                <div>
+                  <h3>Peak Days vs. Flare Days: The Anatomy of Feeling Good</h3>
+                  <p>Direct comparison of your top days against days with elevated symptoms.</p>
+                </div>
+                <span class="contrast-badge">Top 25% vs Bottom 25%</span>
+              </div>
+              <div class="contrast-table" id="blueprint-contrast-table"></div>
+              <div class="blueprint-takeaway" id="blueprint-takeaway"></div>
+            </div>
+          </article>
           <article class="insight-banner">
             <div class="insight-art" aria-hidden="true">
               <span class="orb orb-one"></span><span class="orb orb-two"></span>
@@ -224,6 +253,48 @@
 
         <section class="secondary-panel" id="patterns" data-panel="patterns" hidden>
           <div class="section-heading"><div><p class="eyebrow">Correlations</p><h2>Your patterns</h2><p>Early signals that become more useful as you keep logging.</p></div></div>
+          
+          <article class="card kitchen-compass-card" id="kitchen-compass-card" aria-label="The Kitchen Compass">
+            <div class="compass-header">
+              <div>
+                <span class="blueprint-kicker">FOOD INTELLIGENCE · THE KITCHEN COMPASS</span>
+                <h2>Safe Baselines &amp; Trigger Radar</h2>
+                <p>Operational meal guidance based on 24–48 hour symptom lag analysis from your INSTINCT logs.</p>
+              </div>
+              <div id="radar-status-badge" class="radar-status-badge"></div>
+            </div>
+            <div id="compass-radar-banner" class="compass-radar-banner"></div>
+            <div class="compass-shelves">
+              <section class="compass-shelf safe-shelf">
+                <div class="shelf-title">
+                  <span class="shelf-dot safe"></span>
+                  <h3>Safe Baselines</h3>
+                  <span class="shelf-count" id="safe-foods-count">0 foods</span>
+                </div>
+                <p class="shelf-desc">Tested 2+ times with calm stomach (avg ≤ 1.5) and clear skin (avg ≤ 2.5).</p>
+                <div class="safe-tags" id="safe-foods-list"></div>
+              </section>
+              <section class="compass-shelf watchlist-shelf">
+                <div class="shelf-title">
+                  <span class="shelf-dot watch"></span>
+                  <h3>Watchlist</h3>
+                  <span class="shelf-count" id="watchlist-foods-count">0 foods</span>
+                </div>
+                <p class="shelf-desc">Early mild reaction (+0.4 to +1.1 symptom increase). More logs needed.</p>
+                <div class="watchlist-tags" id="watchlist-foods-list"></div>
+              </section>
+              <section class="compass-shelf trigger-shelf">
+                <div class="shelf-title">
+                  <span class="shelf-dot trigger"></span>
+                  <h3>Confirmed Triggers</h3>
+                  <span class="shelf-count" id="trigger-foods-count">0 triggers</span>
+                </div>
+                <p class="shelf-desc">High-confidence flare drivers (+1.2+ symptom severity increase within 24–48h).</p>
+                <div class="trigger-cards-grid" id="trigger-foods-list"></div>
+              </section>
+            </div>
+          </article>
+
           <div class="patterns-grid" id="patterns-grid"></div>
         </section>
 

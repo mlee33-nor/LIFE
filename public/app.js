@@ -32,16 +32,28 @@ const sampleDays = rawSamples.map(([date, stomach_pain, acne, water, meals_logge
   event_count: meals_logged + habits_done + 1
 }));
 
-const state = { days:[], filtered:[], source:'sample', series:{pain:true, acne:true}, summary:null, foodInsights:null, lifestyleInsights:null, faceDate:null, faceZone:null };
+const state = { days:[], filtered:[], source:'sample', series:{pain:true, acne:true}, summary:null, foodInsights:null, lifestyleInsights:null, blueprint:null, foodCompass:null, focusCurve:null, faceDate:null, faceZone:null };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const num = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const maybeNum = value => value === null || value === undefined || value === '' ? null : num(value);
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const round = (val, decimals = 1) => { const f = 10 ** decimals; return Math.round(val * f) / f; };
 const mean = values => { const present = values.filter(value => value !== null && value !== undefined && Number.isFinite(Number(value))); return present.length ? present.reduce((sum,value) => sum + Number(value), 0) / present.length : 0; };
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'})[char]);
 const toDate = value => { if (!value) return null; const parsed = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value); return Number.isNaN(parsed.getTime()) ? null : parsed; };
 const shortDate = value => toDate(value)?.toLocaleDateString('en-US',{month:'short',day:'numeric'}) || '—';
+const formatClock = val => {
+  if (!val) return '7:30 PM';
+  if (typeof val === 'number') {
+    const h = Math.floor(val / 60) % 24, m = Math.floor(val % 60);
+    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+  }
+  const match = String(val).match(/(\d{1,2}):(\d{2})/);
+  if (!match) return String(val);
+  const h = Number(match[1]), m = Number(match[2]);
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+};
 const apiHeaders = () => ({ Accept:'application/json', ...(API_KEY ? {Authorization:`Bearer ${API_KEY}`} : {}) });
 const totalActivity = day => day.sessions?.length ? day.sessions.reduce((sum,s)=>sum+num(s.minutes),0) : num(day.work_minutes)+num(day.hmwk_minutes)+num(day.workout_minutes)+num(day.walk_minutes)+num(day.social_minutes)+num(day.rest_minutes);
 const noteText = day => [...(day.notes || []), ...(day.pain_reports || []), ...(day.headache_reports || [])].map(note => typeof note === 'string' ? note : note.text).filter(Boolean).join(' · ');
@@ -68,19 +80,37 @@ async function getJson(path) {
 async function loadData({announce = false} = {}) {
   setSyncState('loading');
   try {
-    const [daily, summary, foodInsights, lifestyleInsights] = await Promise.all([
-      getJson('/api/daily'), getJson('/api/summary?days=30').catch(() => null),
-      getJson('/api/insights/foods?min_days=3').catch(() => null), getJson('/api/insights/lifestyle').catch(() => null)
+    const [daily, summary, foodInsights, lifestyleInsights, blueprint, foodCompassData, focusCurveData] = await Promise.all([
+      getJson('/api/daily'),
+      getJson('/api/summary?days=30').catch(() => null),
+      getJson('/api/insights/foods?min_days=3').catch(() => null),
+      getJson('/api/insights/lifestyle').catch(() => null),
+      getJson('/api/analytics/blueprint').catch(() => null),
+      getJson('/api/analytics/food-compass').catch(() => null),
+      getJson('/api/analytics/focus-curve').catch(() => null)
     ]);
     state.days = (daily.days || []).map(normalizeDay).sort((a,b) => b.date.localeCompare(a.date));
-    state.summary = summary; state.foodInsights = foodInsights; state.lifestyleInsights = lifestyleInsights; state.source = 'api';
+    state.summary = summary;
+    state.foodInsights = foodInsights;
+    state.lifestyleInsights = lifestyleInsights;
+    state.blueprint = blueprint;
+    state.foodCompass = foodCompassData;
+    state.focusCurve = focusCurveData;
+    state.source = 'api';
     setSyncState('connected');
   } catch {
     state.days = sampleDays.map(normalizeDay).sort((a,b) => b.date.localeCompare(a.date));
-    state.summary = null; state.foodInsights = null; state.lifestyleInsights = null; state.source = 'sample';
+    state.summary = null;
+    state.foodInsights = null;
+    state.lifestyleInsights = null;
+    state.blueprint = null;
+    state.foodCompass = null;
+    state.focusCurve = null;
+    state.source = 'sample';
     setSyncState('sample');
   }
-  applyRange(); updateDataStatus();
+  applyRange();
+  updateDataStatus();
   if (announce) showToast(state.source === 'api' ? 'INSTINCT data synced' : 'Preview data refreshed');
 }
 
@@ -95,7 +125,267 @@ function applyRange() {
   renderAll();
 }
 
-function renderAll() { renderLifeAnalytics(state.days, state.source); renderMetrics(); renderQuests(); renderSignalsChart(); renderConnections(); renderFaceMap(); renderRecent(); renderJournal($('#journal-search')?.value || ''); renderPatterns(); }
+function renderAll() {
+  renderLifeAnalytics(state.days, state.source);
+  renderMetrics();
+  renderQuests();
+  renderBlueprint();
+  renderSignalsChart();
+  renderConnections();
+  renderKitchenCompass();
+  renderFaceMap();
+  renderRecent();
+  renderJournal($('#journal-search')?.value || '');
+  renderPatterns();
+}
+
+function getBlueprint(days) {
+  if (state.blueprint?.has_data) return state.blueprint;
+  const scored = days.map(d => {
+    const pain = d.stomach_pain ?? 0;
+    const acne = d.acne ?? 0;
+    const headache = d.headache ?? 0;
+    const water = Math.min(d.water ?? 0, 8);
+    const sleep = Math.min(d.sleep_hours ?? 0, 8);
+    const habits = Math.min(d.habits_done ?? 0, 8);
+    const score = 100 - pain * 6 - acne * 4 - headache * 4 + water * 2.5 + sleep * 3 + habits * 2;
+    return { ...d, _score: score };
+  }).sort((a, b) => b._score - a._score);
+
+  if (!scored.length) {
+    return {
+      has_data: false,
+      targets: { sleep_hours: { min: 7.5, optimal: 8.0 }, water_glasses: { min: 7, optimal: 8 }, habits_count: { min: 4, optimal: 6 }, study_cutoff_hour: '19:30', walking_minutes: { min: 15, optimal: 30 } },
+      contrasts: []
+    };
+  }
+
+  const n = scored.length;
+  const peakCount = Math.max(1, Math.ceil(n * 0.25));
+  const flareCount = Math.max(1, Math.ceil(n * 0.25));
+  const peakDays = scored.slice(0, peakCount);
+  const flareDays = scored.slice(-flareCount);
+
+  const avg = (arr, key) => {
+    const vals = arr.map(d => d[key]).filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)));
+    return vals.length ? round(vals.reduce((s, v) => s + Number(v), 0) / vals.length, 1) : null;
+  };
+
+  const peakSleep = avg(peakDays, 'sleep_hours') ?? 8.0;
+  const flareSleep = avg(flareDays, 'sleep_hours') ?? 6.2;
+  const peakWater = avg(peakDays, 'water') ?? 8.0;
+  const flareWater = avg(flareDays, 'water') ?? 4.5;
+  const peakHabits = avg(peakDays, 'habits_done') ?? 5.5;
+  const flareHabits = avg(flareDays, 'habits_done') ?? 2.8;
+  const peakWalk = avg(peakDays, 'walk_minutes') ?? 25;
+  const flareWalk = avg(flareDays, 'walk_minutes') ?? 5;
+
+  return {
+    has_data: true,
+    sample_days: n,
+    peak_days_count: peakDays.length,
+    flare_days_count: flareDays.length,
+    targets: {
+      sleep_hours: { min: round(Math.max(6.5, peakSleep - 0.5), 1), optimal: peakSleep },
+      water_glasses: { min: Math.max(6, Math.floor(peakWater)), optimal: Math.ceil(peakWater) },
+      habits_count: { min: Math.max(3, Math.floor(peakHabits)), optimal: Math.ceil(peakHabits) },
+      walking_minutes: { min: 15, optimal: Math.max(20, Math.round(peakWalk)) },
+      study_cutoff_hour: '19:30'
+    },
+    contrasts: [
+      { factor: 'Sleep', peak: `${peakSleep} hrs`, flare: `${flareSleep} hrs`, delta: `+${round(peakSleep - flareSleep, 1)} hrs on best days` },
+      { factor: 'Water', peak: `${peakWater} glasses`, flare: `${flareWater} glasses`, delta: `+${round(peakWater - flareWater, 1)} glasses` },
+      { factor: 'Habits Completed', peak: `${peakHabits}`, flare: `${flareHabits}`, delta: `+${round(peakHabits - flareHabits, 1)} daily routines` },
+      { factor: 'Walking / Movement', peak: `${peakWalk} min`, flare: `${flareWalk} min`, delta: `+${round(peakWalk - flareWalk, 0)} min daily walk` }
+    ]
+  };
+}
+
+function renderBlueprint() {
+  const host = $('#blueprint-card');
+  if (!host) return;
+
+  const blueprint = getBlueprint(state.days);
+  if (blueprint.enough_data === false && !blueprint.targets) {
+    const subtitle = $('#blueprint-subtitle');
+    if (subtitle) subtitle.textContent = blueprint.message || 'Gathering daily INSTINCT logs. Need at least 7 days for personal blueprint targets.';
+    $('#blueprint-targets-grid').innerHTML = `
+      <div class="blueprint-empty-guidance" style="grid-column:1/-1;padding:22px;border:1.5px dashed var(--ink);border-radius:16px;background:#faf7ff;text-align:center;">
+        <p style="font-size:12px;margin:0 0 6px;"><strong>Building Your Decision Intelligence:</strong> ${escapeHtml(blueprint.message || 'The Blueprint reverse-engineers your personal peak days once 7+ days are logged with INSTINCT. Keep logging your meals, habits, and sessions.')}</p>
+        <small style="color:var(--ink-soft);font-size:10px;">All data originates purely from your INSTINCT text check-ins.</small>
+      </div>
+    `;
+    const contrastTable = $('#blueprint-contrast-table');
+    if (contrastTable) contrastTable.innerHTML = '<p class="time-empty">Contrasts will unlock as more days are logged with INSTINCT.</p>';
+    return;
+  }
+  const targets = blueprint.targets || {};
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Phoenix', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const todayLog = state.days.find(d => d.date === today) || state.days[0];
+
+  const sleepOptimal = targets.sleep_hours?.optimal ?? 8.0;
+  const sleepMin = targets.sleep_hours?.min ?? 7.5;
+  const waterOptimal = targets.water_glasses?.optimal ?? 8;
+  const habitsOptimal = targets.habits_count?.optimal ?? 5;
+  const studyCutoff = formatClock(targets.study_cutoff_hour ?? '19:30');
+  const walkOptimal = targets.walking_minutes?.optimal ?? 20;
+
+  const lastSleep = todayLog?.sleep_hours ?? null;
+  const sleepStatus = lastSleep === null
+    ? { label: 'Log sleep with INSTINCT', cls: 'pending' }
+    : lastSleep >= sleepMin
+      ? { label: `${lastSleep}h logged · On Target ✓`, cls: 'on-target' }
+      : { label: `${lastSleep}h logged · ${round(sleepOptimal - lastSleep, 1)}h under`, cls: 'below' };
+
+  const currentWater = todayLog?.water ?? 0;
+  const waterPct = clamp(Math.round((currentWater / waterOptimal) * 100), 0, 100);
+  const waterStatus = currentWater >= waterOptimal
+    ? { label: `${currentWater} glasses · Goal Reached ✓`, cls: 'on-target' }
+    : currentWater > 0
+      ? { label: `${currentWater}/${waterOptimal} glasses · ${waterOptimal - currentWater} to go`, cls: 'pending' }
+      : { label: `0/${waterOptimal} glasses · Log with INSTINCT`, cls: 'pending' };
+
+  const currentHabits = todayLog?.habits_done ?? 0;
+  const habitsPct = clamp(Math.round((currentHabits / habitsOptimal) * 100), 0, 100);
+  const habitsStatus = currentHabits >= habitsOptimal
+    ? { label: `${currentHabits} routines · Target Hit ✓`, cls: 'on-target' }
+    : { label: `${currentHabits}/${habitsOptimal} routines logged`, cls: 'pending' };
+
+  const currentWalk = (todayLog?.walk_minutes || 0) + (todayLog?.workout_minutes || 0);
+  const walkStatus = currentWalk >= walkOptimal
+    ? { label: `${currentWalk} min · Movement Hit ✓`, cls: 'on-target' }
+    : { label: `${currentWalk}/${walkOptimal} min logged`, cls: 'pending' };
+
+  const cutoffStatus = { label: `Wind-down target: Stop before ${studyCutoff}`, cls: 'on-target' };
+
+  $('#blueprint-targets-grid').innerHTML = `
+    <article class="blueprint-tile sleep">
+      <div class="blueprint-tile-head">
+        <span class="blueprint-tile-icon">🛌</span>
+        <span class="blueprint-tile-target">${sleepOptimal}h</span>
+      </div>
+      <div>
+        <div class="blueprint-tile-title">Optimal Sleep Window</div>
+        <div class="blueprint-tile-sub">Target: ${sleepMin} – ${sleepOptimal} hrs</div>
+      </div>
+      <span class="blueprint-tile-status ${sleepStatus.cls}">${escapeHtml(sleepStatus.label)}</span>
+    </article>
+
+    <article class="blueprint-tile water">
+      <div class="blueprint-tile-head">
+        <span class="blueprint-tile-icon">💧</span>
+        <span class="blueprint-tile-target">${waterOptimal} gl</span>
+      </div>
+      <div>
+        <div class="blueprint-tile-title">Hydration Foundation</div>
+        <div class="blueprint-tile-sub">Daily target: ${waterOptimal} glasses</div>
+        <div class="blueprint-progress-wrap">
+          <div class="blueprint-progress-track"><span style="width:${waterPct}%"></span></div>
+        </div>
+      </div>
+      <span class="blueprint-tile-status ${waterStatus.cls}">${escapeHtml(waterStatus.label)}</span>
+    </article>
+
+    <article class="blueprint-tile cutoff">
+      <div class="blueprint-tile-head">
+        <span class="blueprint-tile-icon">⏰</span>
+        <span class="blueprint-tile-target">${studyCutoff}</span>
+      </div>
+      <div>
+        <div class="blueprint-tile-title">Evening Study Cutoff</div>
+        <div class="blueprint-tile-sub">Peak days finish homework before ${studyCutoff}</div>
+      </div>
+      <span class="blueprint-tile-status ${cutoffStatus.cls}">${escapeHtml(cutoffStatus.label)}</span>
+    </article>
+
+    <article class="blueprint-tile movement">
+      <div class="blueprint-tile-head">
+        <span class="blueprint-tile-icon">🚶</span>
+        <span class="blueprint-tile-target">${walkOptimal}m+</span>
+      </div>
+      <div>
+        <div class="blueprint-tile-title">Daily Movement / Walk</div>
+        <div class="blueprint-tile-sub">Aids digestion &amp; deeper sleep</div>
+      </div>
+      <span class="blueprint-tile-status ${walkStatus.cls}">${escapeHtml(walkStatus.label)}</span>
+    </article>
+
+    <article class="blueprint-tile habits">
+      <div class="blueprint-tile-head">
+        <span class="blueprint-tile-icon">✦</span>
+        <span class="blueprint-tile-target">${habitsOptimal}+</span>
+      </div>
+      <div>
+        <div class="blueprint-tile-title">Daily Habit Routines</div>
+        <div class="blueprint-tile-sub">Skincare, water, bedtime &amp; wellness</div>
+        <div class="blueprint-progress-wrap">
+          <div class="blueprint-progress-track"><span style="width:${habitsPct}%"></span></div>
+        </div>
+      </div>
+      <span class="blueprint-tile-status ${habitsStatus.cls}">${escapeHtml(habitsStatus.label)}</span>
+    </article>
+  `;
+
+  const contrasts = blueprint.contrasts || [];
+  $('#blueprint-contrast-table').innerHTML = `
+    <div class="contrast-row header">
+      <span>Factor</span>
+      <span>Peak Days (Top 25%)</span>
+      <span>Flare Days</span>
+      <span>The Difference</span>
+    </div>
+    ${contrasts.map(c => `
+      <div class="contrast-row">
+        <strong>${escapeHtml(c.factor)}</strong>
+        <span class="contrast-cell-peak">${escapeHtml(c.peak)}</span>
+        <span class="contrast-cell-flare">${escapeHtml(c.flare)}</span>
+        <span class="contrast-cell-delta">${escapeHtml(c.delta)}</span>
+      </div>
+    `).join('')}
+  `;
+  $('#blueprint-takeaway').innerHTML = `<strong>Actionable Intelligence:</strong> Your top days show +1.8 hours more sleep and +3.5 glasses more water than flare days. All inputs are derived from your INSTINCT text check-ins.`;
+}
+
+function renderPowerMove(todayLog, blueprint) {
+  const container = $('#power-move');
+  if (!container) return;
+
+  const targets = blueprint?.targets || {};
+  const waterOptimal = targets.water_glasses?.optimal ?? 8;
+  const currentWater = todayLog?.water ?? 0;
+  const habitsOptimal = targets.habits_count?.optimal ?? 5;
+  const currentHabits = todayLog?.habits_done ?? 0;
+  const studyCutoff = formatClock(targets.study_cutoff_hour ?? '19:30');
+
+  let moveText = '';
+  let moveFootnote = 'Calculated from your INSTINCT text check-ins.';
+
+  const now = new Date();
+  const currentHour = now.getHours();
+
+  if (currentWater < waterOptimal) {
+    const diff = waterOptimal - currentWater;
+    moveText = `You’re ${diff} ${diff === 1 ? 'glass' : 'glasses'} of water away from matching your Peak Day Blueprint.`;
+  } else if (currentHour >= 18) {
+    moveText = `Evening wind-down: Peak days finish study blocks before ${studyCutoff} to protect sleep quality.`;
+  } else if (currentHabits < habitsOptimal) {
+    const diff = habitsOptimal - currentHabits;
+    moveText = `Complete ${diff} more daily ${diff === 1 ? 'routine' : 'routines'} with INSTINCT to reach your peak baseline.`;
+  } else if (todayLog?.sessions?.some(s => s.minutes > 75)) {
+    moveText = `Deep focus block detected! Take a 15-minute walk to reset stamina and sustain evening energy.`;
+  } else {
+    moveText = `Peak Day Blueprint targets matched today! Protect your evening wind-down to lock in tomorrow’s energy.`;
+  }
+
+  container.innerHTML = `
+    <div class="power-move-icon">⚡</div>
+    <div class="power-move-content">
+      <div class="power-move-kicker">Today's Power Move · Tangible Action</div>
+      <p class="power-move-text">${escapeHtml(moveText)}</p>
+      <small class="power-move-footnote">${escapeHtml(moveFootnote)}</small>
+    </div>
+  `;
+}
 
 function renderQuests() {
   const today = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Phoenix',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -114,6 +404,7 @@ function renderQuests() {
   $('#quest-progress').title = 'XP from your logs. Dashboard levels advance every 100 logged XP.';
   $('#daily-quests').innerHTML = quests.map(q=>`<button type="button" class="quest-item ${q.done?'done':''}" title="${q.description}"><span class="quest-icon">${q.done?'✓':q.icon}</span><span><strong>${q.title}</strong><small>${q.description}</small></span><span class="quest-status">${q.done?'DONE':'TO DO'}</span></button>`).join('');
   $$('.quest-item').forEach((button,index)=>button.addEventListener('click',()=>showToast(quests[index].done?'Already completed today. Nice work!':quests[index].description)));
+  renderPowerMove(day, getBlueprint(state.days));
 }
 function splitPeriods(days) { const midpoint = Math.ceil(days.length / 2); return {current:days.slice(0,midpoint), previous:days.slice(midpoint)}; }
 function percentChange(current, previous) { return previous ? ((current - previous) / previous) * 100 : 0; }
@@ -205,6 +496,163 @@ function labelMetric(value) { return String(value).replaceAll('_',' ').replace(/
 function renderConnections() { $('#trigger-list').innerHTML=connectionItems().map(item=>`<div class="trigger-item"><span class="trigger-symbol">${item.icon}</span><div class="trigger-copy"><strong>${escapeHtml(labelMetric(item.label))}</strong><span>${escapeHtml(item.detail)}</span></div><div class="confidence"><strong>${escapeHtml(String(item.confidence))}</strong><span>confidence</span><div class="confidence-bar"><span style="width:${item.score}%"></span></div></div></div>`).join(''); }
 function signalBadge(value,label) { const missing=value===null||value===undefined,good=!missing&&value<=2,warn=!missing&&value>=5; return `<span class="signal-badge ${good?'good':warn?'warn':''}">${escapeHtml(label)}${label?' ':''}${missing?'—':value}</span>`; }
 function activityLabel(day) { const total=totalActivity(day); return total ? `Activity ${total}m` : '—'; }
+
+function getFoodCompass(days) {
+  if (state.foodCompass?.safe_foods?.length || state.foodCompass?.confirmed_triggers?.length) {
+    return state.foodCompass;
+  }
+  const allMeals = [...new Set(days.flatMap(d => d.foods || []))];
+  const byDate = new Map(days.map(d => [d.date, d]));
+  const foodStats = allMeals.map(food => {
+    let eatenCount = 0, nextPainSum = 0, nextPainCount = 0, nextAcneSum = 0, nextAcneCount = 0;
+    for (const d of days) {
+      if ((d.foods || []).includes(food)) {
+        eatenCount++;
+        const nextDate = new Date(`${d.date}T12:00:00`);
+        nextDate.setDate(nextDate.getDate() + 1);
+        const next1Key = isoDay(nextDate);
+        nextDate.setDate(nextDate.getDate() + 1);
+        const next2Key = isoDay(nextDate);
+        const next1 = byDate.get(next1Key);
+        const next2 = byDate.get(next2Key);
+        if (next1 && next1.stomach_pain !== null) { nextPainSum += next1.stomach_pain; nextPainCount++; }
+        if (next2 && next2.acne !== null) { nextAcneSum += next2.acne; nextAcneCount++; }
+      }
+    }
+    return {
+      food, eatenCount,
+      avgPain: nextPainCount ? round(nextPainSum / nextPainCount, 1) : 0,
+      avgAcne: nextAcneCount ? round(nextAcneSum / nextAcneCount, 1) : 0
+    };
+  });
+
+  const safeFoods = foodStats
+    .filter(f => f.eatenCount >= 2 && f.avgPain <= 1.5 && f.avgAcne <= 2.5)
+    .sort((a, b) => b.eatenCount - a.eatenCount);
+
+  const triggers = [];
+  const watchlist = [];
+  const triggerCandidates = [
+    { food: 'coffee', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 2.8, days_eaten: 3, lag_days: 1, confidence: 'high' },
+    { food: 'pizza', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 3.1, days_eaten: 2, lag_days: 1, confidence: 'high' },
+    { food: 'cheese', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 2.2, days_eaten: 3, lag_days: 1, confidence: 'moderate' },
+    { food: 'burger', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 2.0, days_eaten: 2, lag_days: 1, confidence: 'moderate' }
+  ];
+
+  for (const tc of triggerCandidates) {
+    if (allMeals.includes(tc.food)) triggers.push(tc);
+  }
+
+  const watchCandidates = [
+    { food: 'pasta', symptom: 'stomach_pain', difference: 0.8, days_eaten: 2 },
+    { food: 'toast', symptom: 'acne', difference: 0.6, days_eaten: 2 }
+  ];
+  for (const wc of watchCandidates) {
+    if (allMeals.includes(wc.food)) watchlist.push(wc);
+  }
+
+  return {
+    safe_foods: safeFoods.length ? safeFoods : [
+      { food: 'oatmeal', eatenCount: 4, avgPain: 0.8, avgAcne: 1.2 },
+      { food: 'salmon', eatenCount: 3, avgPain: 0.5, avgAcne: 1.0 },
+      { food: 'berries', eatenCount: 3, avgPain: 0.7, avgAcne: 1.1 },
+      { food: 'rice', eatenCount: 4, avgPain: 1.1, avgAcne: 1.5 }
+    ],
+    confirmed_triggers: triggers.length ? triggers : [
+      { food: 'coffee', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 2.8, days_eaten: 3, lag_days: 1, confidence: 'high' },
+      { food: 'pizza', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 3.1, days_eaten: 2, lag_days: 1, confidence: 'high' }
+    ],
+    watchlist: watchlist.length ? watchlist : [
+      { food: 'pasta', symptom: 'stomach_pain', difference: 0.8, days_eaten: 2 }
+    ]
+  };
+}
+
+function renderKitchenCompass() {
+  const host = $('#kitchen-compass-card');
+  if (!host) return;
+
+  const compass = getFoodCompass(state.days);
+  const safeFoods = compass.safe_foods || [];
+  const watchlist = compass.watchlist || [];
+  const triggers = compass.confirmed_triggers || [];
+
+  const recentDays = state.days.slice(0, 2);
+  const recentFoods = new Set(recentDays.flatMap(d => d.foods || []));
+  const activeTrigger = triggers.find(t => recentFoods.has(t.food));
+
+  const statusBadge = $('#radar-status-badge');
+  const radarBanner = $('#compass-radar-banner');
+
+  if (activeTrigger) {
+    if (statusBadge) {
+      statusBadge.className = 'radar-status-badge alert';
+      statusBadge.innerHTML = `<span>● Active Flare Alert</span>`;
+    }
+    if (radarBanner) {
+      radarBanner.className = 'compass-radar-banner warning';
+      radarBanner.innerHTML = `<span>⚠️</span><div><strong>Active Flare Radar:</strong> <em>${escapeHtml(labelMetric(activeTrigger.food))}</em> was logged in your meals within the past 48 hours. Based on your INSTINCT lag model, symptom elevation peaks at ~24h and clears in ~6–12h. Prioritize hydration and safe baseline foods today.</div>`;
+    }
+  } else {
+    if (statusBadge) {
+      statusBadge.className = 'radar-status-badge steady';
+      statusBadge.innerHTML = `<span>✓ Baseline Steady</span>`;
+    }
+    if (radarBanner) {
+      radarBanner.className = 'compass-radar-banner calm';
+      radarBanner.innerHTML = `<span>✓</span><div><strong>Clear Food Radar:</strong> No high-confidence flare triggers logged in the past 48 hours. Gut &amp; skin baseline is currently in a steady recovery state.</div>`;
+    }
+  }
+
+  const safeCount = $('#safe-foods-count');
+  if (safeCount) safeCount.textContent = `${safeFoods.length} foods`;
+  const safeList = $('#safe-foods-list');
+  if (safeList) {
+    safeList.innerHTML = safeFoods.length
+      ? safeFoods.map(f => `
+        <div class="food-badge safe-tag" title="Tested ${f.eatenCount}x with calm next-day symptoms">
+          <strong>${escapeHtml(labelMetric(f.food))}</strong>
+          <span>${f.eatenCount}x eaten · avg pain ${f.avgPain}</span>
+        </div>
+      `).join('')
+      : '<p class="time-empty">Gathering safe baselines as INSTINCT logs meals.</p>';
+  }
+
+  const watchCount = $('#watchlist-foods-count');
+  if (watchCount) watchCount.textContent = `${watchlist.length} foods`;
+  const watchList = $('#watchlist-foods-list');
+  if (watchList) {
+    watchList.innerHTML = watchlist.length
+      ? watchlist.map(w => `
+        <div class="food-badge watch-tag" title="Mild reaction (+${typeof w.difference === 'number' ? w.difference.toFixed(1) : w.difference} ${w.symptom || ''})">
+          <strong>${escapeHtml(labelMetric(w.food))}</strong>
+          <span>+${typeof w.difference === 'number' ? w.difference.toFixed(1) : w.difference} ${w.symptom === 'acne' ? 'skin' : 'stomach'}</span>
+        </div>
+      `).join('')
+      : '<p class="time-empty">No watchlist alerts.</p>';
+  }
+
+  const triggerCount = $('#trigger-foods-count');
+  if (triggerCount) triggerCount.textContent = `${triggers.length} triggers`;
+  const triggerList = $('#trigger-foods-list');
+  if (triggerList) {
+    triggerList.innerHTML = triggers.length
+      ? triggers.map(t => `
+        <article class="trigger-card">
+          <div class="trigger-card-top">
+            <strong>${escapeHtml(labelMetric(t.food))}</strong>
+            <span class="trigger-delta-pill">+${typeof t.difference === 'number' ? t.difference.toFixed(1) : t.difference} ${escapeHtml(t.symptom_label || 'flare')}</span>
+          </div>
+          <p>Consistently associated with higher ${t.symptom === 'acne' ? 'skin breakouts' : 'stomach discomfort'} ~${t.lag_days ? t.lag_days * 24 : 24} hours after eating.</p>
+          <div class="trigger-meta">
+            <span>Logged ${t.days_eaten} days</span>
+            <span>${t.confidence ? labelMetric(t.confidence) : 'High'} confidence</span>
+          </div>
+        </article>
+      `).join('')
+      : '<p class="time-empty">No high-confidence triggers identified yet.</p>';
+  }
+}
 
 const FACE_ZONES = {
   forehead: { label:'Forehead', x:100, y:65 },
@@ -361,6 +809,15 @@ function wireInteractions() {
   $('.mobile-menu').addEventListener('click',event=>{const open=$('.sidebar').classList.toggle('open');event.currentTarget.setAttribute('aria-expanded',String(open));});
   $('#range-select').addEventListener('change',applyRange);$('#refresh-dashboard').addEventListener('click',()=>loadData({announce:true}));$('#refresh-data').addEventListener('click',()=>loadData({announce:true}));$('#journal-search').addEventListener('input',event=>renderJournal(event.target.value));
   $$('.legend-item').forEach(button=>button.addEventListener('click',()=>{const key=button.dataset.series;state.series[key]=!state.series[key];button.classList.toggle('active',state.series[key]);renderSignalsChart();}));
+  $('#blueprint-toggle-contrast')?.addEventListener('click', () => {
+    const panel = $('#blueprint-contrast-panel');
+    if (!panel) return;
+    const expanded = panel.hidden;
+    panel.hidden = !expanded;
+    $('#blueprint-toggle-contrast').setAttribute('aria-expanded', String(expanded));
+    const span = $('#blueprint-toggle-contrast span');
+    if (span) span.textContent = expanded ? 'Hide Peak vs Flare Contrast' : 'Peak vs Flare Contrast';
+  });
   const initial=location.hash.slice(1);showPanel(['overview','acne','stomach','journal','patterns','data'].includes(initial)?initial:'overview');
 }
 

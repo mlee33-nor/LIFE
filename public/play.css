@@ -1,8 +1,9 @@
 /* Soma / playground theme */
+.replay-legend{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0}.replay-legend span{display:flex;align-items:center;gap:5px;font-size:10px}.replay-legend i{width:10px;height:10px;border-radius:3px}.unlogged-key{background:#e4dfe9}.replay-strip{position:relative;margin-top:9px;background:repeating-linear-gradient(90deg,#eee9f2 0%,#eee9f2 24.7%,#cbbcd9 24.7%,#cbbcd9 25%);border-radius:10px;overflow:hidden}.replay-segment{position:absolute;height:34px;min-width:2px;border:1px solid #493c5c;border-radius:5px}.replay-segment.estimated{border:2px dashed #493c5c}.replay-agenda{display:grid;gap:8px;margin-top:18px}.replay-block{border:1px solid #ded1eb;border-left:7px solid;padding:12px;border-radius:9px;background:#fff}.replay-block strong,.replay-block span,.replay-block small{display:block}.replay-block strong{font-size:13px}.replay-block span{font-size:11px;margin-top:5px}.replay-block small{font-size:10px;color:#726782;margin-top:5px}
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 .life-analytics{padding:26px;margin-bottom:25px}body:not([data-dashboard="overview"]) .life-analytics{display:none}.time-heading{display:flex;justify-content:space-between;gap:20px;align-items:center}.time-heading h2{font-size:30px;margin-bottom:8px}.time-heading p,.time-panel>p{font-size:12px;color:var(--ink-soft)}.day-picker{display:flex;gap:6px}.day-picker button,.day-picker input,.time-filters input,.time-filters select,.time-filters button,.time-table-heading select{border:1px solid #cbbbdc;border-radius:9px;padding:10px;background:#fff;font:inherit;font-size:12px;color:var(--ink)}.time-filters{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0;align-items:end}.time-filters label{display:grid;gap:6px;flex:1;min-width:125px;font-size:11px}.time-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.time-stats>div{padding:17px;background:#eee4ff;border-radius:14px}.time-stats>div:nth-child(2){background:#e6f3bd}.time-stats>div:nth-child(3){background:#ffe6bd}.time-stats>div:nth-child(4){background:#e0efff}.time-stats span,.time-stats small{display:block;font-size:10px;line-height:1.5;color:#726782}.time-stats strong{display:block;font-size:25px;margin:8px 0;font-family:'Space Grotesk',sans-serif}.time-columns{display:grid;grid-template-columns:1.2fr 1fr;gap:22px;margin:25px 0}.time-panel{min-width:0;border:1px solid #ded1eb;border-radius:16px;padding:18px}.time-panel h3{font-size:17px}.time-axis{display:flex;justify-content:space-between;font-size:9px;color:var(--ink-soft);margin-top:25px}.day-rail{height:20px;position:relative;background:#eee7f5;margin:8px 0}.wake-marker{position:absolute;top:0;transform:translateX(-50%);color:#bd7619}.timeline-row>span{font-size:10px;display:block;margin:10px 0 4px}.timeline-track{height:23px;position:relative;background:repeating-linear-gradient(90deg,#f4eff8 0%,#f4eff8 24.7%,#d7c8e6 24.7%,#d7c8e6 25%);border-radius:5px;overflow:hidden}.timeline-track button{position:absolute;height:100%;border:1px solid #5b427b;border-radius:4px;min-width:5px;padding:0;cursor:pointer}.time-caption{margin:16px 0 0;font-size:10px!important}.time-bar{margin:14px 0}.time-bar>div:first-child{display:flex;justify-content:space-between;gap:10px;font-size:11px}.time-track{height:12px;background:#eee7f5;border-radius:8px;margin-top:7px;overflow:hidden}.time-track span{height:100%;display:block;border-radius:8px}.subject-heading{margin-top:28px}.time-empty{font-size:12px;color:var(--ink-soft);padding:15px 0;line-height:1.6}.time-table-heading{display:flex;justify-content:space-between;align-items:center}.time-table-heading label{font-size:11px}.session-list details{border-top:1px dashed #d7c6e7;padding:13px 0}.session-list summary{display:grid;grid-template-columns:10px minmax(100px,1fr) 1fr 65px;align-items:center;gap:12px;cursor:pointer;font-size:11px}.session-list small{display:block;margin-top:5px;color:var(--ink-soft)}.session-list details p{padding:10px 20px;margin:0;font-size:12px;line-height:1.6}.session-color{width:9px;height:9px;border-radius:50%}.daily-context{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}.daily-context>span{background:#f2eafa;padding:8px 12px;border-radius:8px;font-size:11px}.daily-context b{margin-left:6px}@media(max-width:1000px){.time-columns{grid-template-columns:1fr}.time-stats{grid-template-columns:1fr 1fr}.time-heading{align-items:start;flex-direction:column}}@media(max-width:580px){.life-analytics{padding:15px}.time-heading h2{font-size:24px}.session-list summary{grid-template-columns:9px 1fr 60px}.session-list summary>span:nth-child(3){grid-column:2;grid-row:2}.time-stats strong{font-size:21px}.day-picker input{min-width:0}}
 body[data-dashboard="overview"] .face-map-card,body[data-dashboard="overview"] .dashboard-grid,body[data-dashboard="overview"] .insight-banner,body[data-dashboard="overview"] [data-metric="stomach"],body[data-dashboard="overview"] [data-metric="acne"]{display:none}
-body[data-dashboard="acne"] .quest-board,body[data-dashboard="stomach"] .quest-board,body[data-dashboard="acne"] .insight-banner,body[data-dashboard="stomach"] .insight-banner{display:none}
+body[data-dashboard="acne"] .quest-board,body[data-dashboard="stomach"] .quest-board,body[data-dashboard="acne"] .insight-banner,body[data-dashboard="stomach"] .insight-banner,body[data-dashboard="acne"] .blueprint-card,body[data-dashboard="stomach"] .blueprint-card{display:none}
 body[data-dashboard="acne"] [data-metric="stomach"],body[data-dashboard="acne"] [data-metric="activity"],body[data-dashboard="acne"] [data-metric="habits"],body[data-dashboard="stomach"] [data-metric="acne"],body[data-dashboard="stomach"] [data-metric="activity"],body[data-dashboard="stomach"] [data-metric="habits"],body[data-dashboard="stomach"] .face-map-card{display:none}
 body[data-dashboard="overview"] .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}body[data-dashboard="acne"] .metric-grid,body[data-dashboard="stomach"] .metric-grid{grid-template-columns:minmax(0,1fr)}body[data-dashboard="acne"] .chart-legend,body[data-dashboard="stomach"] .chart-legend{display:none}
 :root{--ink:#29233d;--ink-soft:#726782;--paper:#f7f2ff;--card:#fffdf8;--line:#ded4ed;--sage:#7250db;--sage-dark:#5635ae;--sage-soft:#e8ddff;--coral:#f07a6c;--blue:#558ad5;--lavender:#9763e9;--amber:#a66913;--radius-lg:24px}
@@ -18,3 +19,102 @@ h1,h2,h3,.brand,.metric-value strong{font-family:'Space Grotesk',sans-serif}
 @media(max-width:1100px){.quest-board{grid-template-columns:1fr 1fr}.quest-intro{padding:24px}.quest-side{padding:15px;margin:14px}.insight-banner{grid-template-columns:75px 1fr auto}.main-content{padding-left:24px;padding-right:24px}}
 @media(max-width:800px){.quest-board{grid-template-columns:1fr}.quest-intro{padding:24px 26px 12px}.quest-intro h2{font-size:34px}.quest-progress{margin-top:16px}.quest-side{margin:12px 20px 20px}.insight-banner{grid-template-columns:minmax(0,1fr) auto}.main-content{padding:20px 16px 40px}.topbar{gap:10px}.topbar-copy{min-width:0}h1{font-size:23px}.dashboard-grid{grid-template-columns:minmax(0,1fr)}.card,.insight-copy{min-width:0}.face-stage{border-right:0}}
 @media(max-width:580px){.quest-intro h2{font-size:30px}.game-tag{font-size:8px}.quest-side{margin:10px 14px 16px}.insight-banner{grid-template-columns:minmax(0,1fr);padding:18px}.insight-copy{padding:0}.pulse-score{padding-top:12px}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.metric-card{padding:13px}.metric-value strong{font-size:24px}.metric-head{gap:4px}.trend-pill{font-size:8px}.topbar-actions{gap:0}.mobile-menu{flex-shrink:0}.topbar h1{font-size:20px}.quest-board{box-shadow:4px 4px 0 var(--ink)}.chart-card,.triggers-card{min-height:0}.face-map-layout{grid-template-columns:minmax(0,1fr)}}
+
+/* Today's Power Move */
+.power-move-banner{margin-top:20px;padding:12px 16px;background:#fdfbff;color:var(--ink);border:2px solid var(--ink);border-radius:14px;box-shadow:3px 3px 0 #3b2260;display:flex;align-items:center;gap:12px;transition:transform .15s ease}
+.power-move-banner:hover{transform:translateY(-1px)}
+.power-move-icon{display:grid;place-items:center;width:34px;height:34px;flex-shrink:0;background:#d3ef76;border:1.5px solid var(--ink);border-radius:9px;font-size:16px;font-weight:700}
+.power-move-content{flex:1;min-width:0}
+.power-move-kicker{display:flex;align-items:center;gap:6px;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#7650cf;margin-bottom:2px}
+.power-move-text{font-size:12px;font-weight:600;line-height:1.4;margin:0;color:var(--ink)}
+.power-move-footnote{display:block;font-size:9px;color:var(--ink-soft);margin-top:3px}
+
+/* The Optimal Day Blueprint */
+.blueprint-card{padding:24px;margin-bottom:25px;background:#fffdf8;border:2px solid var(--ink);border-radius:24px;box-shadow:4px 4px 0 #ded0ee}
+.blueprint-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:20px}
+.blueprint-kicker{display:inline-block;font-size:9px;font-weight:700;letter-spacing:1.5px;color:#7650cf;margin-bottom:5px}
+.blueprint-header h2{font-size:24px;letter-spacing:-0.8px;margin-bottom:4px}
+.blueprint-header p{font-size:12px;color:var(--ink-soft);margin:0}
+.blueprint-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.blueprint-tile{padding:16px;border:2px solid var(--ink);border-radius:16px;background:#faf6ff;display:flex;flex-direction:column;justify-content:space-between;gap:12px;box-shadow:2px 2px 0 #d8cbe8;transition:transform .15s ease}
+.blueprint-tile:hover{transform:translateY(-2px)}
+.blueprint-tile.sleep{background:#eee4ff}
+.blueprint-tile.water{background:#dbedff}
+.blueprint-tile.cutoff{background:#ffe6bd}
+.blueprint-tile.movement{background:#e6f3bd}
+.blueprint-tile.habits{background:#fbe0f3}
+.blueprint-tile-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.blueprint-tile-icon{font-size:16px}
+.blueprint-tile-target{font-size:18px;font-weight:700;font-family:'Space Grotesk',sans-serif;color:var(--ink)}
+.blueprint-tile-title{font-size:11px;font-weight:700;color:var(--ink);margin-bottom:2px}
+.blueprint-tile-sub{font-size:10px;color:var(--ink-soft)}
+.blueprint-tile-status{display:flex;align-items:center;gap:6px;font-size:9px;font-weight:700;padding:4px 8px;border-radius:99px;width:max-content;border:1px solid var(--ink)}
+.blueprint-tile-status.on-target{background:#d3ef76;color:var(--ink)}
+.blueprint-tile-status.pending{background:#fffdf8;color:var(--ink-soft)}
+.blueprint-tile-status.below{background:#ffd7d2;color:#8c3226}
+.blueprint-progress-wrap{margin-top:6px}
+.blueprint-progress-track{height:6px;border:1px solid var(--ink);background:#fff;border-radius:20px;overflow:hidden}
+.blueprint-progress-track span{display:block;height:100%;background:#7650cf;border-radius:20px;transition:width .3s ease}
+
+/* Blueprint Contrast Panel */
+.blueprint-contrast-panel{margin-top:24px;padding-top:20px;border-top:2px dashed #ded4ed;animation:panel-in .25s ease both}
+.contrast-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.contrast-header h3{font-size:16px;margin:0 0 3px}
+.contrast-header p{font-size:11px;color:var(--ink-soft);margin:0}
+.contrast-badge{font-size:9px;font-weight:700;background:#eee4ff;border:1px solid var(--ink);padding:4px 8px;border-radius:8px;white-space:nowrap}
+.contrast-table{display:grid;gap:8px}
+.contrast-row{display:grid;grid-template-columns:140px 1fr 1fr 1.2fr;align-items:center;gap:12px;padding:10px 14px;background:#fbf9ff;border:1.5px solid var(--ink);border-radius:12px;font-size:11px}
+.contrast-row.header{background:#29233d;color:white;font-weight:700;font-size:10px;letter-spacing:.5px;text-transform:uppercase}
+.contrast-cell-peak{font-weight:700;color:#355848}
+.contrast-cell-flare{color:#8c3226}
+.contrast-cell-delta{font-weight:700;background:#e6f3bd;padding:3px 8px;border-radius:6px;border:1px solid #7a9c14;width:max-content}
+.blueprint-takeaway{margin-top:14px;padding:12px 14px;background:#eef2ff;border:1.5px solid #6b84db;border-radius:12px;font-size:11px;color:#293766;line-height:1.5}
+
+/* The Kitchen Compass */
+.kitchen-compass-card{padding:24px;margin-bottom:25px;background:#fffdf8;border:2px solid var(--ink);border-radius:24px;box-shadow:4px 4px 0 #ded0ee}
+.compass-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.compass-header h2{font-size:24px;letter-spacing:-0.8px;margin:4px 0}
+.compass-header p{font-size:12px;color:var(--ink-soft);margin:0}
+.radar-status-badge{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;padding:6px 12px;border-radius:12px;border:1.5px solid var(--ink);white-space:nowrap}
+.radar-status-badge.steady{background:#d3ef76;color:var(--ink)}
+.radar-status-badge.alert{background:#ffd7d2;color:#8c3226}
+.compass-radar-banner{padding:12px 16px;border-radius:14px;border:1.5px solid var(--ink);font-size:11px;line-height:1.5;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.compass-radar-banner.calm{background:#eaf6ea;border-color:#4a824e;color:#244b27}
+.compass-radar-banner.warning{background:#fff1eb;border-color:#d67968;color:#853729}
+.compass-shelves{display:grid;gap:20px}
+.compass-shelf{padding:18px;border:1.5px solid var(--ink);border-radius:16px;background:#faf7ff}
+.shelf-title{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.shelf-title h3{font-size:16px;margin:0}
+.shelf-dot{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ink)}
+.shelf-dot.safe{background:#60c57c}
+.shelf-dot.watch{background:#f7b731}
+.shelf-dot.trigger{background:#eb3b5a}
+.shelf-count{margin-left:auto;font-size:10px;font-weight:700;background:#fff;border:1px solid var(--ink);padding:3px 8px;border-radius:20px}
+.shelf-desc{font-size:10px;color:var(--ink-soft);margin-bottom:12px}
+.safe-tags,.watchlist-tags{display:flex;flex-wrap:wrap;gap:8px}
+.food-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px solid var(--ink);border-radius:10px;background:#fff;font-size:11px;box-shadow:2px 2px 0 #ded0ee;transition:transform .12s}
+.food-badge:hover{transform:translateY(-1px)}
+.food-badge strong{font-weight:700}
+.food-badge span{font-size:9px;color:var(--ink-soft)}
+.food-badge.safe-tag{border-left:4px solid #60c57c}
+.food-badge.watch-tag{border-left:4px solid #f7b731}
+.trigger-cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.trigger-card{padding:14px;border:2px solid var(--ink);border-left:6px solid #eb3b5a;border-radius:12px;background:#fff;box-shadow:2px 2px 0 #ecc0c8}
+.trigger-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px}
+.trigger-card strong{font-size:14px;font-family:'Space Grotesk',sans-serif;color:var(--ink)}
+.trigger-delta-pill{font-size:9px;font-weight:700;background:#ffe3e3;color:#a82323;border:1px solid #d45959;padding:2px 6px;border-radius:6px;white-space:nowrap}
+.trigger-card p{font-size:11px;color:var(--ink-soft);margin-bottom:8px;line-height:1.4}
+.trigger-meta{display:flex;align-items:center;justify-content:space-between;font-size:9px;color:#7d728e;padding-top:6px;border-top:1px dashed #e8dbe8}
+
+/* Replay Stamina & Peak Window */
+.peak-productivity-band{position:absolute;top:0;bottom:0;background:rgba(118,80,207,0.12);border-left:2px dashed #7650cf;border-right:2px dashed #7650cf;pointer-events:none;z-index:1}
+.peak-band-label{position:absolute;top:3px;left:6px;font-size:8px;font-weight:700;letter-spacing:.5px;color:#5635ae;text-transform:uppercase;background:rgba(255,255,255,0.88);padding:1px 5px;border-radius:4px;border:1px solid #7650cf}
+.stamina-advisory-pill{display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:700;background:#ffeac7;color:#8c5810;border:1px solid #c9933f;padding:2px 6px;border-radius:6px;margin-top:4px;width:max-content}
+.stamina-advisory-text{background:#fff8eb;border-left:3px solid #b9833f;padding:8px 12px;font-size:11px;color:#634316;margin:6px 0 0;border-radius:0 6px 6px 0}
+
+@media(max-width:800px){
+  .contrast-row{grid-template-columns:1fr 1fr;gap:8px}
+  .contrast-row.header{display:none}
+  .blueprint-header{flex-direction:column;align-items:flex-start}
+  .compass-header{flex-direction:column;align-items:flex-start}
+}

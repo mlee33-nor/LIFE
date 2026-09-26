@@ -8,7 +8,7 @@
     "start": "node server.mjs",
     "dev:api": "npm --prefix backend run dev",
     "test": "npm run test:ui && npm run test:backend",
-    "test:ui": "node --check public/app.js && node --check server.mjs",
+    "test:ui": "node --check public/app.js && node --check public/life.js && node --check server.mjs",
     "test:backend": "npm --prefix backend test"
   },
   "engines": {
