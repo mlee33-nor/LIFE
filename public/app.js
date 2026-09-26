@@ -1,4 +1,5 @@
 // server.mjs proxies /api/* to the backend, so the API is same-origin by default.
+import { renderLifeAnalytics } from './life.js';
 const API_BASE = window.SOMA_API_BASE ?? '';
 const API_KEY = window.SOMA_API_KEY ?? localStorage.getItem('soma-api-key') ?? '';
 
@@ -42,12 +43,14 @@ const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, char => ({'
 const toDate = value => { if (!value) return null; const parsed = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value); return Number.isNaN(parsed.getTime()) ? null : parsed; };
 const shortDate = value => toDate(value)?.toLocaleDateString('en-US',{month:'short',day:'numeric'}) || '—';
 const apiHeaders = () => ({ Accept:'application/json', ...(API_KEY ? {Authorization:`Bearer ${API_KEY}`} : {}) });
-const totalActivity = day => num(day.work_minutes) + num(day.hmwk_minutes) + num(day.workout_minutes) + num(day.walk_minutes);
-const noteText = day => (day.notes || []).map(note => typeof note === 'string' ? note : note.text).filter(Boolean).join(' · ');
+const totalActivity = day => day.sessions?.length ? day.sessions.reduce((sum,s)=>sum+num(s.minutes),0) : num(day.work_minutes)+num(day.hmwk_minutes)+num(day.workout_minutes)+num(day.walk_minutes)+num(day.social_minutes)+num(day.rest_minutes);
+const noteText = day => [...(day.notes || []), ...(day.pain_reports || []), ...(day.headache_reports || [])].map(note => typeof note === 'string' ? note : note.text).filter(Boolean).join(' · ');
 
 function normalizeDay(day) {
   return {
     date:day.date, event_count:num(day.event_count), stomach_pain:maybeNum(day.stomach_pain), acne:maybeNum(day.acne), acne_spots:maybeNum(day.acne_spots),
+    wake_time:day.wake_time ?? null, sleep_hours:day.sleep_hours ?? null,
+    xp:maybeNum(day.xp), headache:maybeNum(day.headache), headache_reports:day.headache_reports||[], missed_habits:day.missed_habits||[], pain_reports:day.pain_reports||[], social_minutes:num(day.social_minutes), rest_minutes:num(day.rest_minutes),
     water:maybeNum(day.water), meals_logged:num(day.meals_logged), habits_done:num(day.habits_done),
     work_minutes:num(day.work_minutes), hmwk_minutes:num(day.hmwk_minutes), workout_minutes:num(day.workout_minutes), walk_minutes:num(day.walk_minutes),
     foods:Array.isArray(day.foods) ? day.foods : [], meals:Array.isArray(day.meals) ? day.meals : [],
@@ -92,7 +95,26 @@ function applyRange() {
   renderAll();
 }
 
-function renderAll() { renderMetrics(); renderSignalsChart(); renderConnections(); renderFaceMap(); renderRecent(); renderJournal($('#journal-search')?.value || ''); renderPatterns(); }
+function renderAll() { renderLifeAnalytics(state.days, state.source); renderMetrics(); renderQuests(); renderSignalsChart(); renderConnections(); renderFaceMap(); renderRecent(); renderJournal($('#journal-search')?.value || ''); renderPatterns(); }
+
+function renderQuests() {
+  const today = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Phoenix',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  const day = state.days.find(day => day.date === today);
+  const quests = [
+    {icon:'✦', title:'Make a little time for you', description:'Log a habit with INSTINCT', done:day?.habits_done > 0},
+    {icon:'◷', title:'Get into your groove', description:'Log a work, study, walk, or workout session', done:day ? totalActivity(day)>0 : false},
+    {icon:'✎', title:'Leave a breadcrumb', description:'Record one check-in today', done:day?.event_count > 0}
+  ];
+  const xp = state.days.reduce((sum,day)=>sum+(day.xp??0),0);
+  const safeXp = Math.max(0, xp);
+  const level = Math.floor(safeXp / 100) + 1;
+  const levelProgress = safeXp % 100;
+  $('#quest-date').textContent = 'Today';
+  $('#quest-progress').innerHTML = `<span class="level-badge">LVL ${level}</span><div class="xp-info"><div class="xp-label"><span>${xp} check-in XP</span><span>${levelProgress}/100</span></div><div class="xp-track"><span style="width:${levelProgress}%"></span></div></div>`;
+  $('#quest-progress').title = 'XP from your logs. Dashboard levels advance every 100 logged XP.';
+  $('#daily-quests').innerHTML = quests.map(q=>`<button type="button" class="quest-item ${q.done?'done':''}" title="${q.description}"><span class="quest-icon">${q.done?'✓':q.icon}</span><span><strong>${q.title}</strong><small>${q.description}</small></span><span class="quest-status">${q.done?'DONE':'TO DO'}</span></button>`).join('');
+  $$('.quest-item').forEach((button,index)=>button.addEventListener('click',()=>showToast(quests[index].done?'Already completed today. Nice work!':quests[index].description)));
+}
 function splitPeriods(days) { const midpoint = Math.ceil(days.length / 2); return {current:days.slice(0,midpoint), previous:days.slice(midpoint)}; }
 function percentChange(current, previous) { return previous ? ((current - previous) / previous) * 100 : 0; }
 
@@ -119,6 +141,11 @@ function renderMetrics() {
   $('#pain-value').textContent = pain.toFixed(1); setTrend($('#pain-change'),`${painDelta <= 0 ? '↓':'↑'} ${Math.abs(Math.round(painDelta))}%`,painDelta <= 0);
   // 0 is a real (clear-skin) score; only "no acne values at all" means not logged.
   const acneLogged = current.some(day => day.acne !== null && day.acne !== undefined);
+  if (!current.some(day=>day.stomach_pain!==null)) {
+    const reports=current.reduce((sum,day)=>sum+day.pain_reports.length,0);
+    $('#pain-value').textContent=reports?'Pain reported':'—';
+    setTrend($('#pain-change'),reports?'unscored reports':'not logged',false,true);
+  }
   $('#acne-value').textContent = acneLogged ? acne.toFixed(1).replace('.0','') : '—';
   setTrend($('#acne-change'),!acneLogged ? 'not logged' : Math.abs(acneDelta)<.5 ? '→ stable' : `${acneDelta<0?'↓':'↑'} ${Math.abs(acneDelta).toFixed(1)}`,acneDelta<=0,!acneLogged || Math.abs(acneDelta)<.5);
   $('#activity-value').textContent = `${Math.round(activity)} min`; setTrend($('#activity-change'),`${activityDelta>=0?'↑':'↓'} ${Math.abs(activityDelta)} min`,activityDelta>=0);
@@ -150,7 +177,7 @@ function renderSignalsChart() {
   if (!days.length) { wrap.innerHTML='<div class="empty-state">No signals in this date range.</div>'; return; }
   const width=720,height=210,pad={top:12,right:10,bottom:28,left:26},innerWidth=width-pad.left-pad.right,innerHeight=height-pad.top-pad.bottom;
   const x=index=>pad.left+(index/Math.max(days.length-1,1))*innerWidth, y=value=>pad.top+innerHeight-(clamp(value??0,0,10)/10)*innerHeight;
-  const path=key=>days.map((day,index)=>`${index?'L':'M'}${x(index).toFixed(1)},${y(day[key]).toFixed(1)}`).join(' ');
+  const path=key=>days.map((day,index)=>day[key]===null?'':`${index&&days[index-1][key]!==null?'L':'M'}${x(index).toFixed(1)},${y(day[key]).toFixed(1)}`).join(' ');
   const labels=days.map((day,index)=>{const stride=Math.max(1,Math.ceil(days.length/7)); return index%stride===0||index===days.length-1?`<text class="axis-text" x="${x(index)}" y="${height-5}" text-anchor="middle">${shortDate(day.date)}</text>`:'';}).join('');
   const points=key=>days.map((day,index)=>day[key]===null?'':`<circle class="point chart-point" data-index="${index}" cx="${x(index)}" cy="${y(day[key])}" r="3.3" fill="${key==='stomach_pain'?'#537b69':'#d67968'}"/>`).join('');
   const pain=state.series.pain?`<path class="series-line" d="${path('stomach_pain')}" stroke="#537b69"/>${points('stomach_pain')}`:'';
@@ -284,6 +311,17 @@ function renderFaceDetails(day,spots) {
 }
 
 function renderRecent() {
+  const mode=document.body.dataset.dashboard;
+  if (['overview','acne','stomach'].includes(mode)) {
+    const container=$('#recent-table');
+    $('.recent-card h2').textContent={overview:'Your recent adventures',acne:'Your skin check-ins',stomach:'Meals & stomach notes'}[mode];
+    container.innerHTML=state.filtered.slice(0,5).map(day=>{
+      const details=mode==='overview'?day.sessions.map(s=>`${s.label||labelMetric(s.activity)}${s.subject?' · '+s.subject:''} · ${s.minutes} min`).join(' / '):mode==='acne'?(day.skin?.notes||[]).map(n=>n.text).filter(Boolean).join(' · '):[...day.meals.map(m=>m.text),...day.pain_reports.map(r=>r.text)].filter(Boolean).join(' · ');
+      const metric=mode==='overview'?`${day.habits_done} habits · ${totalActivity(day)} min`:mode==='acne'?`Severity ${day.acne??'not logged'} · Spots ${day.acne_spots??'not logged'}`:`Discomfort ${day.stomach_pain??(day.pain_reports?.length?'Pain reported (unscored)':'not logged')}`;
+      return `<article class="tracker-entry"><div><strong>${shortDate(day.date)}</strong><span>${escapeHtml(metric)}</span></div><p>${escapeHtml(details||'No details logged for this tracker.')}</p></article>`;
+    }).join('')||'<div class="empty-state">Your first check-in starts the story. Log it with INSTINCT.</div>';
+    return;
+  }
   const days=state.filtered.slice(0,4),container=$('#recent-table'); if (!days.length) {container.innerHTML='<div class="empty-state">No INSTINCT entries yet.</div>';return;}
   container.innerHTML=`<div class="recent-row header"><span>Day</span><span>Stomach</span><span>Skin</span><span>Activity</span><span>Meals & notes</span></div>${days.map(day=>`<div class="recent-row"><div class="day-cell"><strong>${shortDate(day.date)}</strong><span>${toDate(day.date)?.toLocaleDateString('en-US',{weekday:'long'})||''}</span></div><div>${signalBadge(day.stomach_pain,'')}</div><div>${signalBadge(day.acne,'')}</div><div><span class="signal-badge good">${escapeHtml(activityLabel(day))}</span></div><div class="meal-tags">${day.foods.slice(0,2).map(food=>`<span class="meal-tag">${escapeHtml(food)}</span>`).join('')}${noteText(day)?`<span class="meal-tag">${escapeHtml(noteText(day))}</span>`:''}</div></div>`).join('')}`;
 }
@@ -291,14 +329,29 @@ function renderRecent() {
 function renderJournal(query='') {
   const normalized=query.trim().toLowerCase(),days=state.days.filter(day=>!normalized||[...day.foods,noteText(day),...day.sessions.map(session=>`${session.activity} ${session.subject||''}`)].join(' ').toLowerCase().includes(normalized));
   $('#entry-count').textContent=`${days.length} ${days.length===1?'day':'days'}`;
-  $('#journal-list').innerHTML=days.length?days.map(day=>{const date=toDate(day.date);const sessionText=day.sessions.length?day.sessions.map(session=>`${labelMetric(session.activity)}${session.subject?` · ${session.subject}`:''} ${session.minutes}m`).join(' · '):'';const title=day.meals.map(meal=>meal.text).filter(Boolean).join(' · ')||day.foods.join(' · ')||'INSTINCT check-ins';const details=[noteText(day),sessionText].filter(Boolean).join(' — ')||`${day.event_count} events logged by INSTINCT.`;return `<article class="journal-entry"><div class="journal-date"><strong>${date?.getDate()||'—'}</strong><span>${date?.toLocaleDateString('en-US',{month:'short'})||''}</span></div><div class="journal-body"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(details)}</p><div class="journal-signals">${signalBadge(day.stomach_pain,'Stomach')}${signalBadge(day.acne,'Skin')}<span class="signal-badge">Meals ${day.meals_logged}</span><span class="signal-badge">Habits ${day.habits_done}</span><span class="signal-badge">Activity ${totalActivity(day)}m</span>${day.water!==null?`<span class="signal-badge">Water ${day.water}</span>`:''}</div></div><span class="trend-pill neutral">${day.event_count} events</span></article>`;}).join(''):'<div class="empty-state">No journal days match your search.</div>';
+  $('#journal-list').innerHTML=days.length?days.map(day=>{const date=toDate(day.date);const sessionText=day.sessions.length?day.sessions.map(session=>`${session.label||labelMetric(session.activity)}${session.subject?` · ${session.subject}`:''} ${session.minutes}m`).join(' · '):'';const title=day.meals.map(meal=>meal.text).filter(Boolean).join(' · ')||day.foods.join(' · ')||'INSTINCT check-ins';const details=[noteText(day),sessionText].filter(Boolean).join(' — ')||`${day.event_count} events logged by INSTINCT.`;return `<article class="journal-entry"><div class="journal-date"><strong>${date?.getDate()||'—'}</strong><span>${date?.toLocaleDateString('en-US',{month:'short'})||''}</span></div><div class="journal-body"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(details)}</p><div class="journal-signals">${day.stomach_pain===null&&day.pain_reports.length?'<span class="signal-badge warn">Pain reported (unscored)</span>':signalBadge(day.stomach_pain,'Stomach')}${signalBadge(day.acne,'Skin')}<span class="signal-badge">Spots ${day.acne_spots??'—'}</span><span class="signal-badge">XP ${day.xp??'—'}</span><span class="signal-badge">Wake ${escapeHtml(day.wake_time||'—')}</span><span class="signal-badge">Sleep ${day.sleep_hours??'—'}h</span><span class="signal-badge">Headache ${day.headache??(day.headache_reports.length?'reported':'—')}</span><span class="signal-badge">Missed: ${escapeHtml(day.missed_habits.join(', ')||'none logged')}</span><span class="signal-badge">Meals ${day.meals_logged}</span><span class="signal-badge">Habits ${day.habits_done}</span><span class="signal-badge">Activity ${totalActivity(day)}m</span>${day.water!==null?`<span class="signal-badge">Water ${day.water}</span>`:''}</div></div><span class="trend-pill neutral">${day.event_count} events</span></article>`;}).join(''):'<div class="empty-state">No journal days match your search.</div>';
 }
 
 function renderPatterns() { $('#patterns-grid').innerHTML=connectionItems().map(item=>`<article class="card pattern-card"><div class="pattern-top"><span class="pattern-mark">${item.icon}</span><span class="pattern-strength">${item.score}%<small>signal strength</small></span></div><h3>${escapeHtml(labelMetric(item.label))}</h3><p>${escapeHtml(item.detail)}. This is an observation from your INSTINCT logs, not a medical conclusion.</p><span class="trend-pill neutral">${escapeHtml(String(item.confidence))} confidence</span></article>`).join(''); }
 function updateDataStatus() { const connected=state.source==='api';$('#data-badge').textContent=connected?'Connected':'Preview mode';$('#data-badge').className=`status-badge ${connected?'connected':''}`;$('#data-description').textContent=connected?'Live INSTINCT events interpreted by the dashboard API.':'Showing INSTINCT-shaped preview data until the API database is available.';$('#record-count').textContent=state.days.reduce((sum,day)=>sum+day.event_count,0);const dates=state.days.map(day=>toDate(day.date)).filter(Boolean).sort((a,b)=>a-b);$('#data-range').textContent=dates.length?`${dates[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${dates.at(-1).toLocaleDateString('en-US',{month:'short',day:'numeric'})}`:'—';$('#last-refreshed').textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); }
 function setSyncState(mode) { const el=$('#sync-state');el.className=`sync-state ${mode==='connected'?'connected':mode==='sample'?'error':''}`;$('span:last-child',el).textContent=mode==='connected'?'INSTINCT synced':mode==='sample'?'Preview data':'Connecting…'; }
 function watchForUpdates() { if (!('EventSource' in window)) return;const key=API_KEY?`?key=${encodeURIComponent(API_KEY)}`:'';const events=new EventSource(`${API_BASE}/api/events${key}`);events.addEventListener('data-updated',()=>loadData());events.addEventListener('source-error',()=>setSyncState('sample')); }
-function showPanel(name) { $$('[data-panel]').forEach(panel=>{panel.hidden=panel.dataset.panel!==name;});$$('.nav-item').forEach(item=>item.classList.toggle('active',item.dataset.view===name));$('.sidebar').classList.remove('open');$('.mobile-menu').setAttribute('aria-expanded','false');window.scrollTo({top:0,behavior:'smooth'}); }
+function showPanel(name) {
+  const dashboard = ['overview','acne','stomach'].includes(name);
+  document.body.dataset.dashboard = dashboard ? name : '';
+  $$('[data-panel]').forEach(panel=>{panel.hidden=panel.dataset.panel!==(dashboard?'overview':name);});
+  $$('.nav-item').forEach(item=>item.classList.toggle('active',item.dataset.view===name));
+  if (dashboard) {
+    const titles = {overview:'Your life, leveled up ',acne:'Your skin story ',stomach:'Your gut journal '};
+    $('h1').childNodes[0].textContent = titles[name];
+    state.series.pain = name !== 'acne'; state.series.acne = name === 'acne';
+    $$('.legend-item').forEach(button=>button.classList.toggle('active',state.series[button.dataset.series]));
+    $('.chart-card h2').textContent = name==='acne'?'Skin through the week':'Stomach through the week';
+    renderSignalsChart();
+    renderRecent();
+  }
+  $('.sidebar').classList.remove('open');$('.mobile-menu').setAttribute('aria-expanded','false');window.scrollTo({top:0,behavior:'smooth'});
+}
 let toastTimer;function showToast(message){const toast=$('#toast');toast.textContent=message;toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),2400);}
 
 function wireInteractions() {
@@ -308,7 +361,7 @@ function wireInteractions() {
   $('.mobile-menu').addEventListener('click',event=>{const open=$('.sidebar').classList.toggle('open');event.currentTarget.setAttribute('aria-expanded',String(open));});
   $('#range-select').addEventListener('change',applyRange);$('#refresh-dashboard').addEventListener('click',()=>loadData({announce:true}));$('#refresh-data').addEventListener('click',()=>loadData({announce:true}));$('#journal-search').addEventListener('input',event=>renderJournal(event.target.value));
   $$('.legend-item').forEach(button=>button.addEventListener('click',()=>{const key=button.dataset.series;state.series[key]=!state.series[key];button.classList.toggle('active',state.series[key]);renderSignalsChart();}));
-  const initial=location.hash.slice(1);if (['journal','patterns','data'].includes(initial)) showPanel(initial);
+  const initial=location.hash.slice(1);showPanel(['overview','acne','stomach','journal','patterns','data'].includes(initial)?initial:'overview');
 }
 
-wireInteractions();loadData();watchForUpdates();
+wireInteractions();renderAll();loadData();watchForUpdates();

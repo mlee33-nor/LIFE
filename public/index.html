@@ -16,6 +16,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/play.css" />
   </head>
   <body>
     <div class="app-shell">
@@ -30,15 +31,17 @@
         <nav class="nav-list">
           <a class="nav-item active" href="#overview" data-view="overview">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>
-            Overview
+            Life
           </a>
+          <a class="nav-item" href="#acne" data-view="acne"><span aria-hidden="true">✿</span>Acne</a>
+          <a class="nav-item" href="#stomach" data-view="stomach"><span aria-hidden="true">◉</span>Stomach</a>
           <a class="nav-item" href="#journal" data-view="journal">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h10.5A1.5 1.5 0 0 1 18 5v14.5H7A2.5 2.5 0 0 1 4.5 17V5A1.5 1.5 0 0 1 6 3.5Z"/><path d="M8 8h6M8 12h6M7 16h11"/></svg>
-            Journal
+            Adventure log
           </a>
           <a class="nav-item" href="#patterns" data-view="patterns">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V9m5 9V5m6 13v-6m5 6V3"/></svg>
-            Patterns
+            Discoveries
           </a>
           <a class="nav-item" href="#data" data-view="data">
             <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
@@ -93,6 +96,11 @@
         </header>
 
         <section class="overview-panel" id="overview" data-panel="overview">
+          <section id="life-analytics" class="card life-analytics" aria-label="Daily time analytics"></section>
+          <section class="quest-board" aria-labelledby="quest-title">
+            <div class="quest-intro"><span class="game-tag">PLAYER ONE · YOUR DAILY ADVENTURE</span><h2 id="quest-title">Little wins.<br>Big main-character energy.</h2><p>Show up for yourself. Every check-in counts.</p><div id="quest-progress" class="quest-progress"></div></div>
+            <div class="quest-side"><div class="quest-heading"><h3>Daily side quests</h3><span id="quest-date"></span></div><div id="daily-quests"></div><p class="quest-footnote">Completed from your logs. No points lost for a tough day.</p></div>
+          </section>
           <article class="insight-banner">
             <div class="insight-art" aria-hidden="true">
               <span class="orb orb-one"></span><span class="orb orb-two"></span>
