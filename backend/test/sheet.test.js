@@ -58,7 +58,7 @@ test('skin rows: routines, water oz, sleep, spots; skips derived/pending rows', 
     's-p,2026-09-02,,America/Phoenix,Skin,skin_log,reported,PM routine,,,,not_reported,,,,,,,,,,',
   );
   const mapped = mapSheetRows(rows);
-  assert.equal(mapped.length, 5);
+  assert.equal(mapped.length, 6); // routine/summary/pending rows skipped; zone count kept
   const { daily } = interpret(toEvents(mapped));
   const d = daily[0];
   assert.deepEqual(d.missed_habits, ['am_skincare']);
@@ -66,6 +66,17 @@ test('skin rows: routines, water oz, sleep, spots; skips derived/pending rows', 
   assert.equal(d.water, 5);
   assert.equal(d.sleep_hours, 6);
   assert.equal(d.acne_spots, 16);
+  assert.deepEqual(d.skin.locations, []); // a zone with 0 spots isn't a hotspot
+});
+
+test('per-zone spot counts become face-map locations', () => {
+  const rows = csv(
+    's-z1,2026-09-01,,America/Phoenix,Skin,skin_log,reported,Visible spots: leftCheek,6,estimated count,,agent_photo_estimate,,,,,,,,,,',
+    's-z2,2026-09-01,,America/Phoenix,Skin,skin_log,reported,Visible spots: rightJaw,2,estimated count,,agent_photo_estimate,,,,,,,,,,',
+    's-z3,2026-09-01,,America/Phoenix,Skin,skin_log,reported,Visible spots: nose,0,estimated count,,agent_photo_estimate,,,,,,,,,,',
+  );
+  const d = interpret(toEvents(mapSheetRows(rows))).daily[0];
+  assert.deepEqual(d.skin.locations.map((l) => [l.zone, l.spots, l.severity]), [['left_cheek', 6, 7], ['right_jaw', 2, 2]]);
 });
 
 test('every mapped event has a unique sheet_row_id', () => {

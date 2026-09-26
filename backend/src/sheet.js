@@ -12,7 +12,9 @@ const HABIT_ALIASES = { room_cleaned: 'room_clean', skin_am: 'am_skincare', skin
 const SKIN_ROUTINES = { 'am routine': 'am_skincare', 'pm routine': 'pm_skincare', sunscreen: 'sunscreen' };
 // Skin-tab rows already covered by Life-tab rows (sessions, wake, bedtime) or
 // derived by the sheet's own dashboard; skipped to avoid double counting.
-const SKIN_SKIP = /^(nap|rest in bed|stated bedtime|first wake text|bedtime-to-first-wake|routine score|visible spots:)/;
+const SKIN_SKIP = /^(nap|rest in bed|stated bedtime|first wake text|bedtime-to-first-wake|routine score)/;
+// Sheet zone names ("leftCheek") -> the face map's zone ids ("left_cheek").
+const zoneId = (name) => name.trim().replace(/([a-z])([A-Z])/g, '$1_$2').replace(/\s+/g, '_').toLowerCase();
 
 export function parseCsv(text) {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
@@ -119,6 +121,8 @@ function mapSkinRow(row, at) {
     add('life', { kind: 'sleep', hours: num(row.value), text: row.notes || null });
   } else if (label === 'headache' && yes) {
     add('life', { kind: 'headache', severity: null, text: row.notes || null });
+  } else if (label.startsWith('visible spots:') && num(row.value) !== null) {
+    add('skin', { kind: 'zone_spots', zone: zoneId(row.label.split(':')[1]), count: num(row.value), text: row.notes || null });
   } else if (label === 'visible inflamed spots' && num(row.value) !== null) {
     add('skin', { kind: 'spots', count: num(row.value), text: row.notes || null });
   } else if (row.photo_reference || row.unit === 'photo') {

@@ -108,7 +108,7 @@ function emptyDay(date) {
     ...Object.fromEntries(ACTIVITIES.map((a) => [`${a}_minutes`, 0])),
     hmwk_by_subject: {},
     goals: [],
-    skin: { routines: 0, photos: 0, notes: [] },
+    skin: { routines: 0, photos: 0, notes: [], locations: [], photo_list: [] },
     notes: [],
   };
 }
@@ -212,8 +212,21 @@ export function interpret(events) {
       const severity = num(data.severity);
       if (severity !== null) d.acne = Math.max(d.acne ?? 0, severity);
       if (data.kind === 'spots' && num(data.count) !== null) d.acne_spots = Math.max(d.acne_spots ?? 0, num(data.count));
+      if (data.kind === 'zone_spots' && data.zone && num(data.count) !== null) {
+        // Per-zone spot counts for the face map. Severity is estimated from
+        // the count so zones can be shaded: 1-2 mild, 3-5 moderate, 6+ active.
+        const count = num(data.count);
+        d.skin.locations = d.skin.locations.filter((l) => l.zone !== data.zone);
+        if (count > 0) {
+          d.skin.locations.push({ zone: data.zone, spots: count, severity: count >= 6 ? 7 : count >= 3 ? 5 : 2, severity_estimated: true });
+        }
+        continue;
+      }
       if (data.kind === 'routine') d.skin.routines++;
-      else if (data.kind === 'photo') d.skin.photos++;
+      else if (data.kind === 'photo') {
+        d.skin.photos++;
+        d.skin.photo_list.push({ at: localIso(e.at), label: data.text ?? data.label ?? null, url: data.url ?? null, photo_id: data.photo_id ?? null, external_ref: data.photo_ref ?? null });
+      }
       if (data.text) d.skin.notes.push({ at: localIso(e.at), kind: data.kind ?? null, text: data.text });
     }
   }

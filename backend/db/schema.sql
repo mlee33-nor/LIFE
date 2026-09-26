@@ -44,3 +44,15 @@ CREATE TABLE IF NOT EXISTS sync_status (
   synced_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   result     JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+
+-- Uploaded photos (e.g. face photos for the acne tracker). Each upload also
+-- gets a skin event pointing at /api/photos/:id so it shows up on its day.
+CREATE TABLE IF NOT EXISTS photos (
+  id            BIGSERIAL PRIMARY KEY,
+  sha256        TEXT NOT NULL UNIQUE,
+  content_type  TEXT NOT NULL,
+  bytes         BYTEA NOT NULL,
+  label         TEXT,
+  source_url    TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);

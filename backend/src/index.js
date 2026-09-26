@@ -6,6 +6,7 @@
 //   DELETE /entries/:id       soft-delete a mistaken event
 //   GET/POST /submit          same, as a key-gated HTML form for browser agents
 //   POST   /sync/sheet        body = the sheet's "All events" tab as CSV; upserts it
+//   POST   /photos            image body (?label=&at=) or JSON {url, label, at}
 //
 // Dashboard routes (/api/*) for the UI — interpreted data and insights.
 //
@@ -23,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { createPool, migrate, PgStore } from './db.js';
 import { handleForm } from './form.js';
 import { parseCsv, syncSheet } from './sheet.js';
+import { fetchImage, getPhoto, readBuffer, savePhoto } from './photos.js';
 import { METRICS, TIMEZONE, ACTIVITIES, HABITS, localDate, localIso } from './interpret.js';
 import {
   checkApiKey,
@@ -265,6 +267,21 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         return;
       }
 
+      if (url.pathname === '/photos' && req.method === 'POST') {
+        if (!writeApiKey) throw new HttpError(503, 'WRITE_API_KEY is not configured on the server');
+        if (!checkApiKey(req, writeApiKey, url)) throw new HttpError(401, 'Missing or invalid API key');
+        const type = (req.headers['content-type'] ?? '').toLowerCase();
+        let photo;
+        if (type.startsWith('application/json')) {
+          const body = await readJson(req);
+          photo = { ...(await fetchImage(body.url)), label: body.label ?? null, at: body.at ?? null, sourceUrl: body.url };
+        } else {
+          photo = { buffer: await readBuffer(req), contentType: type, label: url.searchParams.get('label'), at: url.searchParams.get('at') };
+        }
+        sendJson(res, 200, { ok: true, ...(await savePhoto(pool, photo)) });
+        return;
+      }
+
       if (url.pathname === '/submit' && (req.method === 'GET' || req.method === 'POST')) {
         await handleForm(req, res, { pool, store, writeApiKey });
         return;
@@ -304,6 +321,19 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         };
         req.on('close', cleanup);
         res.on('error', cleanup); // client vanished mid-write (EPIPE etc.)
+        return;
+      }
+
+      const photoMatch = url.pathname.match(/^\/api\/photos\/([a-f0-9]{64})$/);
+      if (photoMatch) {
+        const photo = await getPhoto(pool, photoMatch[1]);
+        if (!photo) throw new HttpError(404, 'Photo not found');
+        res.writeHead(200, {
+          'Content-Type': photo.content_type,
+          'Cache-Control': 'private, max-age=31536000, immutable',
+          'X-Content-Type-Options': 'nosniff',
+        });
+        res.end(photo.bytes);
         return;
       }
 

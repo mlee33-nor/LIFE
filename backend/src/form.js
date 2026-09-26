@@ -6,6 +6,7 @@
 
 import { checkApiKey, insertLogs, parseJson, readBody, softDelete, validateLog, ValidationError } from './write.js';
 import { localIso } from './interpret.js';
+import { MAX_PHOTO_BYTES, readBuffer, savePhoto } from './photos.js';
 
 const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -42,12 +43,17 @@ function page({ key = '', json = '', status = null, message = '', details = [], 
 <body>
 <h1>Log entry</h1>
 ${result}
-<form id="log-form" method="post" action="/submit" autocomplete="off">
+<form id="log-form" method="post" action="/submit" enctype="multipart/form-data" autocomplete="off">
   <label for="key">API key</label>
   <input id="key" name="key" type="password" required value="${esc(key)}">
   <label for="json">Entry JSON</label>
-  <textarea id="json" name="json" required spellcheck="false" placeholder="${esc(EXAMPLE)}">${esc(json)}</textarea>
-  <small>One entry <code>{"tracker", "at"?, "data"}</code>, a list <code>[{...}, {...}]</code>, or <code>{"delete": "123"}</code>. See tracker-api-contract.md.</small><br>
+  <textarea id="json" name="json" spellcheck="false" placeholder="${esc(EXAMPLE)}">${esc(json)}</textarea>
+  <small>One entry <code>{"tracker", "at"?, "data"}</code>, a list <code>[{...}, {...}]</code>, or <code>{"delete": "123"}</code>. See tracker-api-contract.md.</small>
+  <label for="photo">Photo (optional)</label>
+  <input id="photo" name="photo" type="file" accept="image/*">
+  <label for="photo_label">Photo label</label>
+  <input id="photo_label" name="photo_label" type="text" placeholder="e.g. Face photo front">
+  <small>Attach a face photo to add it to today's skin log. JSON and a photo can be sent together.</small><br>
   <button id="submit" type="submit">Submit</button>
 </form>
 ${recent.length ? `<h2>Latest entries</h2><table id="recent"><tr><th>id</th><th>tracker</th><th>at</th><th>data</th></tr>${rows}</table>` : ''}
@@ -76,9 +82,22 @@ export async function handleForm(req, res, { pool, store, writeApiKey }) {
     return;
   }
 
-  const form = new URLSearchParams(await readBody(req));
-  const key = form.get('key') ?? '';
-  const json = form.get('json') ?? '';
+  // Multipart when a photo is attached; urlencoded otherwise.
+  const type = req.headers['content-type'] ?? '';
+  let field;
+  let photo = null;
+  if (type.startsWith('multipart/form-data')) {
+    const body = await readBuffer(req, MAX_PHOTO_BYTES + 1_000_000);
+    const fd = await new Request('http://local/', { method: 'POST', headers: { 'content-type': type }, body }).formData();
+    field = (name) => (typeof fd.get(name) === 'string' ? fd.get(name) : '');
+    const file = fd.get('photo');
+    if (file && typeof file !== 'string' && file.size > 0) photo = file;
+  } else {
+    const form = new URLSearchParams(await readBody(req));
+    field = (name) => form.get(name) ?? '';
+  }
+  const key = field('key');
+  const json = field('json');
 
   if (!writeApiKey || !checkApiKey({ headers: { authorization: `Bearer ${key}` } }, writeApiKey)) {
     sendPage(res, 401, { json, status: 'error', message: 'Invalid API key' });
@@ -86,6 +105,35 @@ export async function handleForm(req, res, { pool, store, writeApiKey }) {
   }
 
   try {
+    if (!json.trim() && !photo) throw new ValidationError(['fill in the Entry JSON box, attach a photo, or both']);
+    const messages = [];
+    if (photo) {
+      const saved = await savePhoto(pool, {
+        buffer: Buffer.from(await photo.arrayBuffer()),
+        contentType: photo.type,
+        label: field('photo_label') || photo.name || null,
+      });
+      messages.push(saved.duplicate ? `Photo already saved (photo ${saved.id})` : `Saved photo ${saved.id}`);
+    }
+    if (json.trim()) messages.push(await handleJson(json, pool));
+    store.dirty = true; // show the new rows below without waiting for NOTIFY
+    sendPage(res, 200, { key, status: 'success', message: messages.join('; '), recent: await recentEntries(store) });
+  } catch (err) {
+    const known = err instanceof ValidationError || ['23514', '22P02', '22007', '22008'].includes(err.code);
+    if (!known) console.error(err);
+    sendPage(res, known ? 400 : 503, {
+      key,
+      json,
+      status: 'error',
+      message: known ? 'Nothing was saved' : `Server error: ${err.message}`,
+      details: err.errors ?? (known ? [err.message] : []),
+    });
+  }
+}
+
+// Handles the Entry JSON box: entries to log, or {"delete": id}.
+async function handleJson(json, pool) {
+  {
     let body;
     try {
       body = parseJson(json);
@@ -113,17 +161,6 @@ export async function handleForm(req, res, { pool, store, writeApiKey }) {
       const ids = await insertLogs(pool, clean);
       message = `Logged ${ids.length} ${ids.length === 1 ? 'entry' : 'entries'}, id ${ids.join(', ')}`;
     }
-    store.dirty = true; // show the new rows below without waiting for NOTIFY
-    sendPage(res, 200, { key, status: 'success', message, recent: await recentEntries(store) });
-  } catch (err) {
-    const known = err instanceof ValidationError || ['23514', '22P02', '22007', '22008'].includes(err.code);
-    if (!known) console.error(err);
-    sendPage(res, known ? 400 : 503, {
-      key,
-      json,
-      status: 'error',
-      message: known ? 'Nothing was saved' : `Server error: ${err.message}`,
-      details: err.errors ?? (known ? [err.message] : []),
-    });
+    return message;
   }
 }
