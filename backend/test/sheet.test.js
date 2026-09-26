@@ -78,17 +78,28 @@ test('every mapped event has a unique sheet_row_id', () => {
   assert.equal(new Set(ids).size, ids.length);
 });
 
-test('entries sent directly win over sheet entries for the same day and tracker', () => {
-  const sheet = (tracker, at) => ({ tracker, at: new Date(at), data: { source: 'sheet', kind: 'note' } });
+test('a direct entry only replaces sheet entries about the same thing that day', () => {
+  const sheet = (tracker, at, data) => ({ tracker, at: new Date(at), data: { ...data, source: 'sheet' } });
+  const direct = (tracker, at, data) => ({ tracker, at: new Date(at), data });
+  const day1 = '2026-09-01T12:00:00-07:00';
   const events = [
-    sheet('food', '2026-09-01T12:00:00-07:00'),
-    sheet('life', '2026-09-01T12:00:00-07:00'),
-    sheet('food', '2026-09-02T12:00:00-07:00'),
-    { tracker: 'food', at: new Date('2026-09-01T13:00:00-07:00'), data: { kind: 'meal', text: 'x' } },
+    sheet('food', day1, { kind: 'meal', text: 'sheet lunch' }),
+    sheet('food', day1, { kind: 'pain_report', pain: 0 }),
+    sheet('life', day1, { kind: 'session', action: 'end', activity: 'hmwk', minutes: 30 }),
+    sheet('life', day1, { kind: 'session', action: 'end', activity: 'work', minutes: 60 }),
+    sheet('life', day1, { kind: 'habit', habit: 'sunscreen' }),
+    sheet('life', day1, { kind: 'xp', amount: 10 }),
+    sheet('food', '2026-09-02T12:00:00-07:00', { kind: 'meal', text: 'next day' }),
+    direct('food', '2026-09-01T13:00:00-07:00', { kind: 'meal', text: 'form lunch' }),
+    direct('life', '2026-09-01T14:00:00-07:00', { kind: 'session', action: 'end', activity: 'hmwk', minutes: 45 }),
+    direct('life', '2026-09-01T09:00:00-07:00', { kind: 'miss', habit: 'sunscreen' }),
+    direct('life', '2026-09-01T17:20:00-07:00', { kind: 'note', text: 'final check' }),
   ];
   const kept = preferDirectEntries(events, localDate);
-  assert.equal(kept.length, 3); // sheet food on 09-01 dropped; sheet life 09-01 and food 09-02 kept
-  assert.ok(!kept.some((e) => e.data.source === 'sheet' && e.tracker === 'food' && localDate(e.at) === '2026-09-01'));
+  const keptSheet = kept.filter((e) => e.data.source === 'sheet').map((e) => e.data.text ?? e.data.activity ?? e.data.kind);
+  // Replaced: sheet lunch, sheet hmwk, sheet sunscreen. Kept: pain report,
+  // work session, xp, next-day meal. The stray note hides nothing.
+  assert.deepEqual(keptSheet.sort(), ['next day', 'pain_report', 'work', 'xp'].sort());
 });
 
 test('duration rows count as sessions; mood keeps its wording', () => {
@@ -100,4 +111,19 @@ test('duration rows count as sessions; mood keeps its wording', () => {
   assert.equal(mapped[1].data.kind, 'mood');
   assert.equal(mapped[1].data.text, 'stressed; overwhelmed');
   assert.equal(interpret(toEvents(mapped)).daily[0].hmwk_minutes, 10);
+});
+
+test('session labels (e.g. who you were with) and social minutes come through', () => {
+  const rows = csv(
+    'l-ss,2026-09-01,20:00,America/Phoenix,Life,social,start,Allison,,,,stated_end_at_bedtime,2026-09-01 20:00,2026-09-02 1:30,330,330,0,,,,,',
+    'l-se,2026-09-02,1:30,America/Phoenix,Life,social,end,,,,,reported_end,2026-09-01 20:00,2026-09-02 1:30,330,330,0,,,,,',
+    'l-ws,2026-09-02,12:26,America/Phoenix,Life,work,start,RSA Software improvements,,,,reported_closed,2026-09-02 12:26,2026-09-02 12:46,20,20,10,,,,,',
+    'l-we,2026-09-02,12:46,America/Phoenix,Life,work,end,,,,,reported_end,2026-09-02 12:26,2026-09-02 12:46,20,20,0,,,,,',
+  );
+  const { daily } = interpret(toEvents(mapSheetRows(rows)));
+  const [d1, d2] = daily;
+  assert.equal(d1.social_minutes, 330);
+  assert.equal(d1.sessions[0].label, 'Allison');
+  assert.equal(d2.work_minutes, 20);
+  assert.equal(d2.sessions[0].label, 'RSA Software improvements');
 });

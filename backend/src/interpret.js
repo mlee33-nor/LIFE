@@ -4,7 +4,7 @@
 
 export const TIMEZONE = process.env.APP_TIMEZONE || 'America/Phoenix';
 
-export const ACTIVITIES = ['work', 'hmwk', 'workout', 'walk', 'rest'];
+export const ACTIVITIES = ['work', 'hmwk', 'workout', 'walk', 'rest', 'social'];
 export const HABITS = [
   'water', 'meal', 'shower', 'room_clean', 'am_skincare', 'pm_skincare',
   'sunscreen', 'morning_ritual', 'bedtime',
@@ -123,11 +123,11 @@ export function interpret(events) {
   const open = new Map(); // sessionKey -> start event
   let lastBedtime = null;
 
-  const addSession = (d, activity, subject, minutes, startAt, endAt) => {
+  const addSession = (d, activity, subject, minutes, startAt, endAt, label = null) => {
     if (minutes === null || minutes < 0) return;
     const m = Math.round(minutes);
     d.sessions.push({
-      activity, subject, minutes: m,
+      activity, subject, label, minutes: m,
       start: startAt ? localIso(startAt) : null,
       end: endAt ? localIso(endAt) : null,
     });
@@ -153,9 +153,9 @@ export function interpret(events) {
         const minutes = num(data.minutes) ?? (start ? (e.at - start.at) / 60000 : null);
         // Attribute the session to the day it started.
         addSession(start ? day(localDate(start.at)) : d, data.activity, data.subject ?? null,
-          minutes, start?.at ?? null, e.at);
+          minutes, start?.at ?? null, e.at, data.label ?? start?.data.label ?? null);
       } else if (num(data.minutes) !== null) {
-        addSession(d, data.activity, data.subject ?? null, num(data.minutes), null, e.at);
+        addSession(d, data.activity, data.subject ?? null, num(data.minutes), null, e.at, data.label ?? null);
       }
     } else if (e.tracker === 'life' && data.kind === 'habit' && data.habit) {
       const h = d.habits[data.habit] ?? { count: 0, value: null };
@@ -224,6 +224,7 @@ export function interpret(events) {
     id: e.id,
     activity: e.data.activity,
     subject: e.data.subject ?? null,
+    label: e.data.label ?? null,
     started_at: localIso(e.at),
   }));
 

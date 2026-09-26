@@ -163,6 +163,11 @@ function mapFoodRows(rows) {
 export function mapSheetRows(rows) {
   const events = [];
   const food = [];
+  // Session names live on start rows; end rows (which carry the minutes)
+  // share start_at/end_at with them, so copy the name across.
+  const sessionKey = (r) => `${r.category}|${r.start_at}|${r.end_at}`;
+  const names = new Map(rows.filter((r) => r.event === 'start' && r.label && r.start_at).map((r) => [sessionKey(r), r.label]));
+  rows = rows.map((r) => (r.event === 'end' && !r.label && names.has(sessionKey(r)) ? { ...r, label: names.get(sessionKey(r)) } : r));
   for (const row of rows) {
     if (!row.row_id || !/^\d{4}-\d{2}-\d{2}$/.test(row.date)) continue;
     const tracker = row.tracker.toLowerCase();
@@ -176,12 +181,23 @@ export function mapSheetRows(rows) {
   }));
 }
 
-// Sheet data is a backup: for any (day, tracker) where entries came in
-// through the API/form, drop the sheet's entries for that day and tracker.
+// What an entry is "about", so a direct entry only replaces sheet entries
+// of the same thing: meals replace meals, a hmwk session replaces hmwk
+// sessions, a sunscreen habit/miss replaces the sheet's sunscreen, etc.
+function topic(e) {
+  const d = e.data ?? {};
+  const kind = d.kind === 'miss' ? 'habit' : d.kind ?? 'unknown';
+  const detail = d.kind === 'session' ? d.activity : ['habit', 'miss'].includes(d.kind) ? d.habit : '';
+  return `${e.tracker}|${kind}|${detail ?? ''}`;
+}
+
+// Sheet data is a backup: when entries about the same thing on the same day
+// came in through the API/form, drop the sheet's versions of them.
 export function preferDirectEntries(events, dayOf) {
-  const direct = new Set(events.filter((e) => e.data?.source !== 'sheet').map((e) => `${dayOf(e.at)}|${e.tracker}`));
+  const key = (e) => `${dayOf(e.at)}|${topic(e)}`;
+  const direct = new Set(events.filter((e) => e.data?.source !== 'sheet').map(key));
   if (direct.size === 0) return events;
-  return events.filter((e) => e.data?.source !== 'sheet' || !direct.has(`${dayOf(e.at)}|${e.tracker}`));
+  return events.filter((e) => e.data?.source !== 'sheet' || !direct.has(key(e)));
 }
 
 // Refuse to remove more than this share of existing sheet entries in one
