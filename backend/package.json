@@ -9,7 +9,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "test": "node --test \"test/*.test.js\"",
-    "db:seed-sample": "node scripts/seed-sample.js"
+    "db:seed-sample": "node scripts/seed-sample.js",
+    "db:sync-sheet": "node scripts/sync-sheet.js"
   },
   "engines": {
     "node": ">=20"

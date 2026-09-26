@@ -4,7 +4,8 @@
 import { readFile } from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
 import pg from 'pg';
-import { interpret } from './interpret.js';
+import { interpret, localDate } from './interpret.js';
+import { preferDirectEntries } from './sheet.js';
 
 const SCHEMA_URL = new URL('../db/schema.sql', import.meta.url);
 
@@ -98,7 +99,8 @@ export class PgStore extends EventEmitter {
         `SELECT id, tracker, at, data, created_at FROM events
          WHERE deleted_at IS NULL ORDER BY at, id`
       );
-      const events = rows.map((r) => ({ id: String(r.id), tracker: r.tracker, at: r.at, data: r.data }));
+      const all = rows.map((r) => ({ id: String(r.id), tracker: r.tracker, at: r.at, data: r.data }));
+      const events = preferDirectEntries(all, localDate);
       const lastWrite = rows.reduce((max, r) => (r.created_at > max ? r.created_at : max), new Date(0));
       this.state = {
         events,

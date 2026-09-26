@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS events_tracker_at_idx ON events (tracker, at) WHERE deleted_at IS NULL;
 
+-- Rows synced from the Google Sheet carry data.sheet_row_id so re-syncing
+-- updates them in place instead of duplicating.
+CREATE UNIQUE INDEX IF NOT EXISTS events_sheet_row_idx ON events ((data->>'sheet_row_id'))
+  WHERE data ? 'sheet_row_id';
+
 -- Tell listeners (the API) that data changed so the dashboard refreshes live.
 CREATE OR REPLACE FUNCTION events_notify() RETURNS trigger AS $$
 BEGIN

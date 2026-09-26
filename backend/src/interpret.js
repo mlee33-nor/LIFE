@@ -14,6 +14,7 @@ export const HABITS = [
 export const METRICS = [
   'stomach_pain',
   'acne',
+  'acne_spots',
   'headache',
   'sleep_hours',
   'wake_hour',
@@ -86,6 +87,7 @@ function emptyDay(date) {
     stomach_pain: null,
     pain_reports: [],
     acne: null,
+    acne_spots: null,
     headache: null,
     headache_reports: [],
     wake_time: null,
@@ -173,11 +175,13 @@ export function interpret(events) {
       }
       lastBedtime = null;
     } else if (e.tracker === 'life' && data.kind === 'headache') {
+      // Unscored reports are listed but don't set the 0-10 score.
       const severity = num(data.severity);
-      if (severity !== null) {
-        d.headache_reports.push({ at: localIso(e.at), severity, text: data.text ?? null });
-        d.headache = Math.max(d.headache ?? 0, severity);
-      }
+      d.headache_reports.push({ at: localIso(e.at), severity, text: data.text ?? null });
+      if (severity !== null) d.headache = Math.max(d.headache ?? 0, severity);
+    } else if (e.tracker === 'life' && data.kind === 'sleep' && num(data.hours) !== null) {
+      // Reported sleep; a bedtime -> wake calculation takes precedence.
+      d.reported_sleep_hours = num(data.hours);
     } else if (e.tracker === 'life' && data.kind === 'miss' && data.habit) {
       if (!d.missed_habits.includes(data.habit)) d.missed_habits.push(data.habit);
       d.misses = d.missed_habits.length;
@@ -186,9 +190,9 @@ export function interpret(events) {
       d.xp_events.push({ at: localIso(e.at), amount: num(data.amount), reason: data.reason ?? null });
     } else if (e.tracker === 'food') {
       const pain = num(data.pain);
-      if (pain !== null) {
+      if (pain !== null) d.stomach_pain = Math.max(d.stomach_pain ?? 0, pain);
+      if (pain !== null || data.kind === 'pain_report') {
         d.pain_reports.push({ at: localIso(e.at), pain, text: data.text ?? null });
-        d.stomach_pain = Math.max(d.stomach_pain ?? 0, pain);
       }
       if (data.kind === 'meal') {
         d.meals.push({ at: localIso(e.at), text: data.text ?? '' });
@@ -201,6 +205,7 @@ export function interpret(events) {
       // Acne score comes from `severity` (0-10) on skin events.
       const severity = num(data.severity);
       if (severity !== null) d.acne = Math.max(d.acne ?? 0, severity);
+      if (data.kind === 'spots' && num(data.count) !== null) d.acne_spots = Math.max(d.acne_spots ?? 0, num(data.count));
       if (data.kind === 'routine') d.skin.routines++;
       else if (data.kind === 'photo') d.skin.photos++;
       if (data.text) d.skin.notes.push({ at: localIso(e.at), kind: data.kind ?? null, text: data.text });
@@ -208,7 +213,11 @@ export function interpret(events) {
   }
 
   const daily = [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
-  for (const d of daily) d.habits_done = Object.keys(d.habits).length;
+  for (const d of daily) {
+    d.habits_done = Object.keys(d.habits).length;
+    if (d.sleep_hours === null && d.reported_sleep_hours != null) d.sleep_hours = d.reported_sleep_hours;
+    delete d.reported_sleep_hours;
+  }
 
   const activeSessions = [...open.values()].map((e) => ({
     id: e.id,
