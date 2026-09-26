@@ -38,10 +38,11 @@ const partsFormatter = new Intl.DateTimeFormat('en-CA', {
   hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
 });
 
-export const localDate = (d) => dayFormatter.format(d);
+export const localDate = (d) => dayFormatter.format(typeof d === 'string' ? new Date(d) : d);
 
 // ISO-8601 in the app timezone, e.g. 2026-09-25T15:20:00-07:00.
 export function localIso(d) {
+  if (typeof d === 'string') d = new Date(d);
   const p = Object.fromEntries(partsFormatter.formatToParts(d).map((x) => [x.type, x.value]));
   const tz = offsetFormatter.formatToParts(d).find((x) => x.type === 'timeZoneName').value;
   const offset = tz === 'GMT' ? '+00:00' : tz.replace('GMT', '');

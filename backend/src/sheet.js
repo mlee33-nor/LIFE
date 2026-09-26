@@ -184,10 +184,16 @@ export function preferDirectEntries(events, dayOf) {
   return events.filter((e) => e.data?.source !== 'sheet' || !direct.has(`${dayOf(e.at)}|${e.tracker}`));
 }
 
+// Refuse to remove more than this share of existing sheet entries in one
+// sync; a truncated or broken export shouldn't wipe the backup.
+const MAX_REMOVAL_SHARE = 0.5;
+
 // Upserts mapped sheet events by sheet_row_id and soft-deletes sheet events
 // whose rows are gone from the sheet. Returns counts.
 export async function syncSheet(pool, rows) {
   const events = mapSheetRows(rows);
+  // An empty mapping would make "NOT (id = ANY('{}'))" match every row.
+  if (events.length === 0) return { rows: rows.length, events: 0, removed: 0, skipped_removal: 'no valid rows in sheet' };
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -203,13 +209,26 @@ export async function syncSheet(pool, rows) {
       );
       upserted++;
     }
-    const { rowCount: removed } = await client.query(
-      `UPDATE events SET deleted_at = now()
-       WHERE data ? 'sheet_row_id' AND deleted_at IS NULL AND NOT (data->>'sheet_row_id' = ANY($1))`,
-      [events.map((e) => e.data.sheet_row_id)]
+    const ids = events.map((e) => e.data.sheet_row_id);
+    const { rows: [counts] } = await client.query(
+      `SELECT count(*)::int AS live,
+              count(*) FILTER (WHERE NOT (data->>'sheet_row_id' = ANY($1)))::int AS stale
+       FROM events WHERE data ? 'sheet_row_id' AND deleted_at IS NULL`,
+      [ids]
     );
+    let removed = 0;
+    let skipped;
+    if (counts.stale > 5 && counts.stale > counts.live * MAX_REMOVAL_SHARE) {
+      skipped = `would remove ${counts.stale} of ${counts.live} sheet entries; export looks incomplete`;
+    } else if (counts.stale > 0) {
+      ({ rowCount: removed } = await client.query(
+        `UPDATE events SET deleted_at = now()
+         WHERE data ? 'sheet_row_id' AND deleted_at IS NULL AND NOT (data->>'sheet_row_id' = ANY($1))`,
+        [ids]
+      ));
+    }
     await client.query('COMMIT');
-    return { rows: rows.length, events: upserted, removed };
+    return { rows: rows.length, events: upserted, removed, ...(skipped && { skipped_removal: skipped }) };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

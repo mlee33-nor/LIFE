@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { foodKeywords, interpret, localIso } from '../src/interpret.js';
+import { foodKeywords, interpret, localDate, localIso } from '../src/interpret.js';
 
 const ev = (id, tracker, at, data) => ({ id: String(id), tracker, at: new Date(at), data });
 
@@ -105,4 +105,9 @@ test('headaches, misses, xp and rest roll up per day', () => {
   assert.equal(d.misses, 1);
   assert.equal(d.xp, 15);
   assert.equal(d.rest_minutes, 20);
+});
+
+test('localDate and localIso accept ISO strings as well as Dates', () => {
+  assert.equal(localDate('2026-09-26T03:00:00Z'), '2026-09-25');
+  assert.equal(localIso('2026-09-25T22:20:00Z'), '2026-09-25T15:20:00-07:00');
 });
