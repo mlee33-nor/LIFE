@@ -297,19 +297,17 @@ export function timeseries(daily, { from, to, metrics = METRICS, smooth = 7 } = 
   return { from: start, to: end, smooth, points };
 }
 
+// Below this many days, peak-vs-flare comparisons are noise.
+const BLUEPRINT_MIN_DAYS = 7;
+
 // Reverse-engineers top peak days vs flare days into a tangible daily recipe.
 export function optimalBlueprint(daily) {
   if (!daily || daily.length === 0) {
     return {
       has_data: false,
+      enough_data: false,
       message: 'Need logged days to compute blueprint.',
-      targets: {
-        sleep_hours: { min: 7.5, optimal: 8.0 },
-        water_glasses: { min: 7, optimal: 8 },
-        habits_count: { min: 4, optimal: 6 },
-        study_cutoff_hour: '19:30',
-        walking_minutes: { min: 15, optimal: 30 }
-      },
+      targets: null,
       contrasts: []
     };
   }
@@ -336,14 +334,16 @@ export function optimalBlueprint(daily) {
     return vals.length ? round(mean(vals), 1) : null;
   };
 
-  const peakSleep = avgMetric(peakDays, 'sleep_hours') ?? 8.0;
-  const flareSleep = avgMetric(flareDays, 'sleep_hours') ?? 6.2;
-  const peakWater = avgMetric(peakDays, 'water') ?? 8.0;
-  const flareWater = avgMetric(flareDays, 'water') ?? 4.5;
-  const peakHabits = avgMetric(peakDays, 'habits_done') ?? 5.5;
-  const flareHabits = avgMetric(flareDays, 'habits_done') ?? 2.8;
-  const peakWalk = avgMetric(peakDays, 'walk_minutes') ?? 25;
-  const flareWalk = avgMetric(flareDays, 'walk_minutes') ?? 5;
+  // Real averages only: a metric with no data stays null rather than being
+  // filled with a made-up default.
+  const peakSleep = avgMetric(peakDays, 'sleep_hours');
+  const flareSleep = avgMetric(flareDays, 'sleep_hours');
+  const peakWater = avgMetric(peakDays, 'water');
+  const flareWater = avgMetric(flareDays, 'water');
+  const peakHabits = avgMetric(peakDays, 'habits_done');
+  const flareHabits = avgMetric(flareDays, 'habits_done');
+  const peakWalk = avgMetric(peakDays, 'walk_minutes');
+  const flareWalk = avgMetric(flareDays, 'walk_minutes');
 
   const extractCutoff = (days) => {
     const endMinutes = days.flatMap((d) => (d.sessions || []).filter((s) => s.activity === 'hmwk' || s.activity === 'work').map((s) => {
@@ -351,7 +351,7 @@ export function optimalBlueprint(daily) {
       const m = s.end.match(/T(\d{2}):(\d{2})/);
       return m ? Number(m[1]) * 60 + Number(m[2]) : null;
     })).filter(Boolean);
-    if (!endMinutes.length) return '19:30';
+    if (!endMinutes.length) return null;
     const p75 = endMinutes.sort((a, b) => a - b)[Math.floor(endMinutes.length * 0.75)];
     const h = String(Math.floor(p75 / 60)).padStart(2, '0');
     const min = String(Math.floor(p75 % 60)).padStart(2, '0');
@@ -360,24 +360,32 @@ export function optimalBlueprint(daily) {
 
   const studyCutoff = extractCutoff(peakDays);
 
+  const enough = n >= BLUEPRINT_MIN_DAYS;
+  const contrast = (factor, peak, flare, unit) =>
+    peak === null || flare === null ? null
+      : { factor, peak: `${peak} ${unit}`.trim(), flare: `${flare} ${unit}`.trim(), delta: `${peak - flare >= 0 ? '+' : ''}${round(peak - flare, 1)} ${unit} on best days`.trim() };
+
   return {
     has_data: true,
+    enough_data: enough,
+    ...(!enough && { message: `Based on ${n} logged day${n === 1 ? '' : 's'}; patterns need at least ${BLUEPRINT_MIN_DAYS} days to mean anything.` }),
     sample_days: n,
     peak_days_count: peakDays.length,
     flare_days_count: flareDays.length,
-    targets: {
-      sleep_hours: { min: round(Math.max(6.5, peakSleep - 0.5), 1), optimal: peakSleep },
-      water_glasses: { min: Math.max(6, Math.floor(peakWater)), optimal: Math.ceil(peakWater) },
-      habits_count: { min: Math.max(3, Math.floor(peakHabits)), optimal: Math.ceil(peakHabits) },
-      walking_minutes: { min: 15, optimal: Math.max(20, Math.round(peakWalk)) },
-      study_cutoff_hour: studyCutoff
-    },
-    contrasts: [
-      { factor: 'Sleep', peak: `${peakSleep} hrs`, flare: `${flareSleep} hrs`, delta: `+${round(peakSleep - flareSleep, 1)} hrs on best days` },
-      { factor: 'Water', peak: `${peakWater} glasses`, flare: `${flareWater} glasses`, delta: `+${round(peakWater - flareWater, 1)} glasses` },
-      { factor: 'Habits Completed', peak: `${peakHabits}`, flare: `${flareHabits}`, delta: `+${round(peakHabits - flareHabits, 1)} daily routines` },
-      { factor: 'Walking / Movement', peak: `${peakWalk} min`, flare: `${flareWalk} min`, delta: `+${round(peakWalk - flareWalk, 0)} min daily walk` }
-    ]
+    // Targets only once there's enough data, and only for measured metrics.
+    targets: enough ? {
+      sleep_hours: peakSleep === null ? null : { min: round(Math.max(6.5, peakSleep - 0.5), 1), optimal: peakSleep },
+      water_glasses: peakWater === null ? null : { min: Math.max(6, Math.floor(peakWater)), optimal: Math.ceil(peakWater) },
+      habits_count: peakHabits === null ? null : { min: Math.max(3, Math.floor(peakHabits)), optimal: Math.ceil(peakHabits) },
+      walking_minutes: peakWalk === null ? null : { min: 15, optimal: Math.max(20, Math.round(peakWalk)) },
+      study_cutoff_hour: studyCutoff,
+    } : null,
+    contrasts: enough ? [
+      contrast('Sleep', peakSleep, flareSleep, 'hrs'),
+      contrast('Water', peakWater, flareWater, 'glasses'),
+      contrast('Habits Completed', peakHabits, flareHabits, ''),
+      contrast('Walking / Movement', peakWalk, flareWalk, 'min'),
+    ].filter(Boolean) : [],
   };
 }
 
