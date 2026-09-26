@@ -44,6 +44,16 @@ browser but can't send headers. The JSON box takes a `/log` body, a list of
 them (saved all-or-nothing), or `{"delete": "<id>"}`. The result box
 `#result` has `data-status="success|error"`.
 
+### `POST /photos`: face photos
+
+Raw image body (`image/jpeg|png|webp|gif|heic`, max 15 MB, `?label=&at=`) or
+JSON `{url, label, at}` (the server downloads it). Also available as the
+**Photo** field on `/submit`. Returns `{ok, id, url, duplicate}`. Each photo
+adds a skin event and appears in that day's `skin.photo_list`
+(`[{at, label, url, photo_id, external_ref}]`). Images are served at
+`url` = `/api/photos/<sha256>`, an address that can't be guessed. Sheet photo
+rows carry only `external_ref` (a private Instinct link that can't be shown).
+
 ### `DELETE /entries/:id` (extra, for corrections)
 
 Soft-deletes an event, e.g. when Myles says "delete that". The event is
@@ -122,7 +132,10 @@ One record per day. Use it for day views, calendars, and heatmaps.
   "missed_habits": ["sunscreen"], "misses": 1, "xp": 40, "xp_events": [{ "at": "...", "amount": 10, "reason": "hmwk" }],
   "sessions": [{ "activity": "hmwk", "subject": "history", "minutes": 84, "start": "...", "end": "..." }],
   "work_minutes": 0, "hmwk_minutes": 84, "workout_minutes": 0, "walk_minutes": 0, "rest_minutes": 0, "hmwk_by_subject": { "history": 84 },
-  "skin": { "routines": 1, "photos": 0, "notes": [{ "at": "...", "kind": "routine", "text": "..." }] },
+  "skin": { "routines": 1, "photos": 1, "notes": [{ "at": "...", "kind": "routine", "text": "..." }],
+            "locations": [{ "zone": "left_cheek", "spots": 6, "severity": 7, "severity_estimated": true }],  // face map
+            "photo_list": [{ "at": "...", "label": "Face photo front", "url": "/api/photos/<sha256>" }] },
+  "goals": [{ "label": "Calculus homework", "subject": "calculus", "target_minutes": 120, "done_minutes": 37, "complete": false }],
   "notes": [{ "tracker": "food", "at": "...", "text": "..." }]
 }] }
 ```

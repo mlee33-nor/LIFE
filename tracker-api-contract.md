@@ -30,6 +30,24 @@ the 10 latest entries with their ids. To remove a mistaken entry, submit
 `{"delete": "42"}`. To look entries up, open
 `/entries?tracker=food&since=2026-09-25&key=<API_KEY>`.
 
+### Sending face photos (acne tracker)
+
+**Whenever Myles sends a face photo, upload the actual image** so it shows up
+on the dashboard. Links into Instinct's own file storage don't work, because
+the dashboard can't open them.
+
+- **Browser form:** on `/submit`, attach the image in the **Photo** field
+  (`#photo`), put e.g. `Face photo front` / `left` / `right` in **Photo label**
+  (`#photo_label`), and submit. The JSON box can be left empty, or used at the
+  same time for a skin note like
+  `{"tracker":"skin","data":{"kind":"note","text":"two new spots on chin","severity":4}}`.
+- **HTTP:** `POST /photos?label=Face%20photo%20front` with the raw image as the
+  body (`Content-Type: image/jpeg` or `image/png`), or `POST /photos` with JSON
+  `{"url": "<public image link>", "label": "Face photo front"}`.
+
+Uploading the same image twice is harmless (it's detected and not duplicated).
+Photos appear on the day they're uploaded unless you pass `at`.
+
 ## Using HTTP directly (if an agent can send headers)
 
 Every request carries `Authorization: Bearer <API_KEY>` and a JSON body
