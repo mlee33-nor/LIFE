@@ -107,6 +107,15 @@ async function loadData({announce = false} = {}) {
     setSyncState('connected');
   } catch (err) {
     if (err?.locked) return; // unlock screen is showing; don't render sample data
+    // On the real site never show sample data as if it were real (e.g. when the
+    // phone app opens offline): keep what was last loaded and say so.
+    if (!['localhost', '127.0.0.1'].includes(location.hostname)) {
+      setSyncState('offline');
+      const status = document.querySelector('#sync-state span:last-child');
+      if (status) status.textContent = state.days.length ? 'Offline · showing last loaded data' : 'Offline · can’t reach your data';
+      if (!state.days.length) applyRange();
+      return;
+    }
     state.days = sampleDays.map(normalizeDay).sort((a,b) => b.date.localeCompare(a.date));
     state.summary = null;
     state.foodInsights = null;

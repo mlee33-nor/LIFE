@@ -10,15 +10,15 @@
 // next open while online and the HTML never runs against stale scripts.
 // Bump VERSION to force old caches to be dropped.
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = `soma-shell-${VERSION}`;
 const FONT_CACHE = `soma-fonts-${VERSION}`;
 const NETWORK_TIMEOUT_MS = 3500;
 
 const SHELL = [
   '/',
-  '/styles.css', '/play.css', '/replay.css', '/photos.css', '/todos.css', '/mobile.css',
-  '/app.js', '/life.js', '/photos.js', '/todos.js',
+  '/styles.css', '/play.css', '/replay.css', '/photos.css', '/todos.css', '/auth.css', '/review.css', '/mobile.css',
+  '/app.js', '/life.js', '/photos.js', '/todos.js', '/auth.js', '/status.js', '/review.js',
   '/manifest.webmanifest',
   '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png',
   '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png', '/icons/favicon-32.png',
