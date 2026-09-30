@@ -71,40 +71,14 @@ export function replayIntervals(days, date) {
     return {...s,originDate:day.date,estimated,from:Math.max(0,(start-startOfDay)/60000),to:Math.min(1440,(end-startOfDay)/60000)};
   })).filter(Boolean).sort((a,b)=>a.from-b.from);
 }
-function findPeakWindow(days) {
-  const hourly = new Array(24).fill(0);
-  for (const day of (days || [])) {
-    for (const s of (day.sessions || [])) {
-      const mins = Number(s.minutes) || 0;
-      if (mins <= 0) continue;
-      const startMin = clock(s.start);
-      if (startMin !== null) {
-        const hour = Math.floor(startMin / 60) % 24;
-        hourly[hour] += mins;
-      }
-    }
-  }
-  let bestHour = 10, maxMins = 0;
-  for (let h = 6; h <= 18; h++) {
-    const sum = hourly.slice(h, h + 4).reduce((a, b) => a + b, 0);
-    if (sum > maxMins) {
-      maxMins = sum;
-      bestHour = h;
-    }
-  }
-  return { startHour: bestHour, endHour: bestHour + 4 };
-}
 
 function replay(days,date,selected) {
   const intervals=replayIntervals(days,date).filter(s=>s.originDate===date?selected.some(x=>x.index===s.index):selectSessions([s],filters).length);
   const legend=[...new Set(intervals.map(getTaskKey))];
   const lanes=[];
   intervals.forEach(s=>{let lane=lanes.findIndex(end=>end<=s.from);if(lane<0)lane=lanes.length;s.lane=lane;lanes[lane]=s.to;});
-  const peak = findPeakWindow(days);
-  const peakFrom = peak.startHour * 60;
-  const peakTo = peak.endHour * 60;
 
-  return `<div class="replay-heading"><div><span class="replay-kicker">THE DAILY REPLAY · DECISION INTELLIGENCE</span><h3>Your day, in color.</h3><p>Session replay with cognitive energy &amp; peak focus tracking.</p></div><span class="replay-count">${intervals.length} sessions</span></div><div class="replay-legend">${legend.map(key=>`<span><i style="background:${getColor(key)}"></i>${esc(names[key]||key)}</span>`).join('')}<span><i class="unlogged-key"></i>Unlogged</span></div><div class="replay-chart"><div class="time-axis"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span></div><div class="replay-strip" style="height:${Math.max(1,lanes.length)*38+16}px"><div class="peak-productivity-band" style="left:${peakFrom/14.4}%;width:${(peakTo-peakFrom)/14.4}%;" title="Peak Productivity Window (${time(peakFrom)} – ${time(peakTo)})"><span class="peak-band-label">★ Peak Zone (${time(peakFrom)}–${time(peakTo)})</span></div>${intervals.map(s=>`<span class="replay-segment" style="left:${s.from/14.4}%;width:${(s.to-s.from)/14.4}%;top:${s.lane*38+8}px;background:${getColor(getTaskKey(s))}" title="${esc(s.label||names[s.activity]||s.activity)}: ${time(s.from)}–${time(s.to)}${s.estimated?' (calculated start)':''}"></span>`).join('')}</div></div><div class="replay-agenda">${intervals.map(s=>`<article class="replay-event" style="--event-color:${getColor(getTaskKey(s))}"><div class="replay-clock"><strong>${time(s.from)}</strong><small>${s.to===1440?'12:00 AM':time(s.to)}</small></div><div class="replay-spine"><i></i></div><div class="replay-event-body"><div class="replay-event-title"><strong>${esc(s.label||names[s.activity]||s.activity)}</strong><span>${duration(s.to-s.from)}</span></div><p>${esc(names[s.activity]||s.activity)}${s.subject!=='Unspecified'?' / '+esc(s.subject):''}${s.originDate!==date?' · continued from '+s.originDate:''}</p>${(s.to-s.from)>75?'<span class="stamina-advisory-pill" title="Sessions >75m correlate with 35% higher subsequent fatigue.">⚡ >75m Deep Block · Reset Advised</span>':''}${s.estimated?'<small class="calculated-label">Start calculated from duration</small>':''}</div></article>`).join('')||'<p class="time-empty">Nothing timed here yet. Try a different day or reset your filters.</p>'}</div><p class="time-caption">Uncolored time is unlogged. Overlapping sessions have separate lanes. Shaded area indicates your reverse-engineered peak focus zone.</p>`;
+  return `<div class="replay-heading"><div><span class="replay-kicker">THE DAILY REPLAY · DECISION INTELLIGENCE</span><h3>Your day, in color.</h3><p>Where your hours went, session by session.</p></div><span class="replay-count">${intervals.length} sessions</span></div><div class="replay-legend">${legend.map(key=>`<span><i style="background:${getColor(key)}"></i>${esc(names[key]||key)}</span>`).join('')}<span><i class="unlogged-key"></i>Unlogged</span></div><div class="replay-chart"><div class="time-axis"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span></div><div class="replay-strip" style="height:${Math.max(1,lanes.length)*38+16}px">${intervals.map(s=>`<span class="replay-segment" style="left:${s.from/14.4}%;width:${(s.to-s.from)/14.4}%;top:${s.lane*38+8}px;background:${getColor(getTaskKey(s))}" title="${esc(s.label||names[s.activity]||s.activity)}: ${time(s.from)}–${time(s.to)}${s.estimated?' (calculated start)':''}"></span>`).join('')}</div></div><div class="replay-agenda">${intervals.map(s=>`<article class="replay-event" style="--event-color:${getColor(getTaskKey(s))}"><div class="replay-clock"><strong>${time(s.from)}</strong><small>${s.to===1440?'12:00 AM':time(s.to)}</small></div><div class="replay-spine"><i></i></div><div class="replay-event-body"><div class="replay-event-title"><strong>${esc(s.label||names[s.activity]||s.activity)}</strong><span>${duration(s.to-s.from)}</span></div><p>${esc(names[s.activity]||s.activity)}${s.subject!=='Unspecified'?' / '+esc(s.subject):''}${s.originDate!==date?' · continued from '+s.originDate:''}</p>${(s.to-s.from)>75?'<span class="stamina-advisory-pill" title="Sessions >75m correlate with 35% higher subsequent fatigue.">⚡ >75m Deep Block · Reset Advised</span>':''}${s.estimated?'<small class="calculated-label">Start calculated from duration</small>':''}</div></article>`).join('')||'<p class="time-empty">Nothing timed here yet. Try a different day or reset your filters.</p>'}</div><p class="time-caption">Uncolored time is unlogged. Overlapping sessions have separate lanes.</p>`;
 }
 let searchDebounceTimer = null;
 export function renderLifeAnalytics(days,source) {
@@ -116,10 +90,9 @@ export function renderLifeAnalytics(days,source) {
   const activities=[...new Set([...Object.keys(names),...sessions.map(s=>s.activity)])];
   const sum=selected.reduce((n,s)=>n+s.minutes,0),homework=selected.filter(s=>s.activity==='hmwk'),hw=homework.reduce((n,s)=>n+s.minutes,0);
   const longest=selected.reduce((n,s)=>Math.max(n,s.minutes),0);
-  const peak=findPeakWindow(days);
   const option=(value,label,chosen)=>`<option value="${esc(value)}" ${chosen===value?'selected':''}>${esc(label)}</option>`;
   host.innerHTML=`<div class="time-heading"><div><p class="eyebrow">LIFE / THE DAILY REPLAY</p><h2>Where did your day go?</h2><p>Every session, every subject, all in one place. ${source==='sample'?'Preview data.':''}</p></div><div class="day-picker"><button type="button" data-day-shift="-1" aria-label="Previous day">←</button><input aria-label="Day to analyze" type="date" id="life-date" value="${filters.date}"><button type="button" data-day-shift="1" aria-label="Next day">→</button></div></div>
-  <div class="daily-context"><span>Logged XP <b>${day?.xp??'—'}</b></span><span>Headache <b>${day?.headache??(day?.headache_reports?.length?'Reported, unscored':'Not logged')}</b></span><span>Peak Zone <b>${time(peak.startHour*60)}–${time(peak.endHour*60)}</b></span><span>Stamina <b>${selected.filter(s=>s.minutes>75).length ? selected.filter(s=>s.minutes>75).length + ' deep blocks (>75m)' : 'In optimal range'}</b></span><span>Missed habits <b>${esc(day?.missed_habits?.join(', ')||'None logged')}</b></span></div>
+  <div class="daily-context"><span>Logged XP <b>${day?.xp??'—'}</b></span><span>Headache <b>${day?.headache??(day?.headache_reports?.length?'Reported, unscored':'Not logged')}</b></span><span>Stamina <b>${selected.filter(s=>s.minutes>75).length ? selected.filter(s=>s.minutes>75).length + ' deep blocks (>75m)' : 'In optimal range'}</b></span><span>Missed habits <b>${esc(day?.missed_habits?.join(', ')||'None logged')}</b></span></div>
   <div class="time-filters"><label>Activity<select id="life-activity">${option('all','All activities',filters.activity)}${activities.map(a=>option(a,names[a]||a,filters.activity)).join('')}</select></label><label>Homework subject<select id="life-subject">${option('all','All subjects',filters.subject)}${subjects.map(s=>option(s,s,filters.subject)).join('')}</select></label><label>Time of day<select id="life-period">${[['all','Full day'],['morning','Before noon'],['afternoon','Noon–6 PM'],['evening','After 6 PM']].map(([v,l])=>option(v,l,filters.period)).join('')}</select></label><label>Find a task<input id="life-search" type="search" placeholder="History, essay, workout…" value="${esc(filters.query)}"></label><button type="button" id="life-reset">Reset</button></div>
   <div class="time-stats"><div><span>Matching logged time</span><strong>${duration(sum)}</strong><small>Session durations; overlaps can count twice</small></div><div><span>Homework</span><strong>${duration(hw)}</strong><small>${homework.length} matching sessions</small></div><div><span>Longest session</span><strong>${duration(longest)}</strong><small>${selected.length} sessions match your filters</small></div><div><span>Woke up</span><strong>${esc(day?.wake_time||'Not logged')}</strong><small>Phoenix time · ${day?.sleep_hours!=null?esc(day.sleep_hours)+'h sleep logged':'sleep not logged'}</small></div></div>
   <div class="time-columns"><div class="time-panel">${replay(days,filters.date,selected)}</div><div class="time-panel"><h3>Your time mix</h3>${bars(selected,'activity')}<h3 class="subject-heading">Homework deep dive</h3>${bars(homework,'subject')}</div></div>
