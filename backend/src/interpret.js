@@ -243,7 +243,8 @@ export function interpret(events) {
       else if (data.kind === 'photo') {
         d.skin.photos++;
         const label = data.text ?? data.label ?? null;
-        const angle = String(label ?? '').toLowerCase().match(/\b(front|left|right)\b/)?.[1] ?? null;
+        // A corrected angle wins over the one guessed from the label.
+        const angle = data.angle ?? String(label ?? '').toLowerCase().match(/\b(front|left|right)\b/)?.[1] ?? null;
         d.skin.photo_list.push({ at: localIso(e.at), label, angle, url: data.url ?? null, photo_id: data.photo_id ?? null, external_ref: data.photo_ref ?? null });
         continue; // photos are listed in photo_list, not repeated as notes
       }

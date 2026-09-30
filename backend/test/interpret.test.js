@@ -113,3 +113,13 @@ test('localDate and localIso accept ISO strings as well as Dates', () => {
   assert.equal(localDate('2026-09-26T03:00:00Z'), '2026-09-25');
   assert.equal(localIso('2026-09-25T22:20:00Z'), '2026-09-25T15:20:00-07:00');
 });
+
+test('a corrected photo angle overrides the label', () => {
+  const at = '2026-09-24T18:50:00-07:00';
+  const { daily } = interpret([
+    ev(1, 'skin', at, { kind: 'photo', text: 'Face photo front', url: '/api/photos/a', angle: 'left' }),
+    ev(2, 'skin', at, { kind: 'photo', text: 'Face photo left', url: '/api/photos/b', angle: 'front' }),
+    ev(3, 'skin', at, { kind: 'photo', text: 'Face photo right', url: '/api/photos/c' }),
+  ]);
+  assert.deepEqual(daily[0].skin.photo_list.map((p) => p.angle), ['left', 'front', 'right']);
+});

@@ -56,3 +56,7 @@ CREATE TABLE IF NOT EXISTS photos (
   source_url    TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Corrected camera angle (front/left/right) for a photo, when the label it
+-- arrived with was wrong. Overrides the angle guessed from the label.
+ALTER TABLE photos ADD COLUMN IF NOT EXISTS angle TEXT CHECK (angle IN ('front', 'left', 'right'));

@@ -100,6 +100,13 @@ export class PgStore extends EventEmitter {
          WHERE deleted_at IS NULL ORDER BY at, id`
       );
       const all = rows.map((r) => ({ id: String(r.id), tracker: r.tracker, at: r.at, data: r.data }));
+      // Apply corrected photo angles (see POST /photos/<sha>/angle).
+      const { rows: fixes } = await this.pool.query('SELECT sha256, angle FROM photos WHERE angle IS NOT NULL');
+      const angleBySha = new Map(fixes.map((f) => [f.sha256, f.angle]));
+      for (const e of all) {
+        const sha = e.data?.kind === 'photo' ? e.data.url?.split('/api/photos/')[1] : null;
+        if (sha && angleBySha.has(sha)) e.data = { ...e.data, angle: angleBySha.get(sha) };
+      }
       const events = preferDirectEntries(all, localDate);
       const lastWrite = rows.reduce((max, r) => (r.created_at > max ? r.created_at : max), new Date(0));
       this.state = {

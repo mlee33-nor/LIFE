@@ -315,6 +315,24 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         return;
       }
 
+      // Correct a photo's camera angle when its label was wrong:
+      // POST /photos/<sha256>/angle {"angle": "front" | "left" | "right" | null}
+      const angleMatch = url.pathname.match(/^\/photos\/([a-f0-9]{64})\/angle$/);
+      if (angleMatch && req.method === 'POST') {
+        if (!writeApiKey) throw new HttpError(503, 'WRITE_API_KEY is not configured on the server');
+        if (!checkApiKey(req, writeApiKey, url)) throw new HttpError(401, 'Missing or invalid API key');
+        const { angle = null } = await readJson(req);
+        if (angle !== null && !['front', 'left', 'right'].includes(angle)) {
+          throw new ValidationError(['angle must be "front", "left", "right" or null']);
+        }
+        const { rowCount } = await pool.query('UPDATE photos SET angle = $2 WHERE sha256 = $1', [angleMatch[1], angle]);
+        if (!rowCount) throw new HttpError(404, 'Photo not found');
+        store.dirty = true;
+        store.emit('change', { op: 'PHOTO_ANGLE' });
+        sendJson(res, 200, { ok: true, angle });
+        return;
+      }
+
       if (url.pathname === '/photos' && req.method === 'POST') {
         if (!writeApiKey) throw new HttpError(503, 'WRITE_API_KEY is not configured on the server');
         if (!checkApiKey(req, writeApiKey, url)) throw new HttpError(401, 'Missing or invalid API key');

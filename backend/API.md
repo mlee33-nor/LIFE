@@ -54,6 +54,13 @@ adds a skin event and appears in that day's `skin.photo_list`
 `url` = `/api/photos/<sha256>`, an address that can't be guessed. Sheet photo
 rows carry only `external_ref` (a private Instinct link that can't be shown).
 
+### `POST /photos/<sha256>/angle`: fix a mislabeled photo
+
+Key-protected. Body `{"angle": "front" | "left" | "right" | null}`. Overrides
+the angle guessed from the photo's label (used by the before/after slider to
+compare the same angle); `null` clears the correction. `<sha256>` is the last
+part of the photo's `url`.
+
 ### `DELETE /entries/:id` (extra, for corrections)
 
 Soft-deletes an event, e.g. when Myles says "delete that". The event is

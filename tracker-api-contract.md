@@ -45,6 +45,11 @@ the dashboard can't open them.
   body (`Content-Type: image/jpeg` or `image/png`), or `POST /photos` with JSON
   `{"url": "<public image link>", "label": "Face photo front"}`.
 
+Label each face photo with its angle (`Face photo front` / `left` / `right`):
+**front** = facing the camera, **left** = head turned so the left cheek
+shows, **right** = right cheek shows. The before/after slider compares photos
+by these angles, so a wrong label compares a front shot to a side shot.
+
 Uploading the same image twice is harmless (it's detected and not duplicated).
 Photos appear on the day they're uploaded unless you pass `at`.
 
