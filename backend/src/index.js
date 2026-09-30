@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { createPool, migrate, PgStore } from './db.js';
 import { handleForm } from './form.js';
 import { parseCsv, syncSheet } from './sheet.js';
+import { recordSync, startSheetPoller } from './sheet-poller.js';
 import { fetchImage, getPhoto, photoFromLink, readBuffer, savePhoto } from './photos.js';
 import { METRICS, TIMEZONE, ACTIVITIES, HABITS, localDate, localIso } from './interpret.js';
 import {
@@ -139,14 +140,21 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
 
   // When the Google Sheet last pushed, and whether that's recent enough.
   async function sheetSyncStatus() {
-    const { rows } = await pool.query(`SELECT synced_at, result FROM sync_status WHERE name = 'sheet'`);
-    if (!rows.length) return { last_synced_at: null, healthy: false, note: 'sheet has never synced' };
-    const minutes = Math.round((Date.now() - rows[0].synced_at.getTime()) / 60000);
+    const { rows } = await pool.query(`SELECT name, synced_at, result FROM sync_status WHERE name IN ('sheet', 'sheet_error')`);
+    const ok = rows.find((r) => r.name === 'sheet');
+    const failed = rows.find((r) => r.name === 'sheet_error');
+    // Only surface an error that happened after the last successful sync.
+    const error = failed && (!ok || failed.synced_at > ok.synced_at)
+      ? { last_error: failed.result.error, last_error_at: localIso(failed.synced_at) } : {};
+    if (!ok) return { last_synced_at: null, healthy: false, note: 'sheet has never synced', ...error };
+    const minutes = Math.round((Date.now() - ok.synced_at.getTime()) / 60000);
     return {
-      last_synced_at: localIso(rows[0].synced_at),
+      last_synced_at: localIso(ok.synced_at),
       minutes_ago: minutes,
-      healthy: minutes <= 15,
-      ...rows[0].result,
+      healthy: minutes <= 15 && !error.last_error,
+      polling: Boolean(process.env.SHEET_CSV_URL),
+      ...ok.result,
+      ...error,
     };
   }
 
@@ -306,11 +314,7 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         const rows = parseCsv(await readBody(req, 5_000_000));
         if (!rows.length || !('row_id' in rows[0])) throw new HttpError(400, 'Body must be the sheet CSV with a row_id column');
         const result = await syncSheet(pool, rows, { resolvePhoto: (link, label) => photoFromLink(pool, link, label) });
-        await pool.query(
-          `INSERT INTO sync_status (name, synced_at, result) VALUES ('sheet', now(), $1)
-           ON CONFLICT (name) DO UPDATE SET synced_at = now(), result = EXCLUDED.result`,
-          [{ ...result, via: url.searchParams.get('via') ?? 'manual' }]
-        );
+        await recordSync(pool, result, url.searchParams.get('via') ?? 'manual');
         sendJson(res, 200, { ok: true, ...result });
         return;
       }
@@ -441,6 +445,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   await store.listen();
   const writeApiKey = process.env.WRITE_API_KEY || process.env.MUSE_API_KEY;
   if (!writeApiKey) console.warn('WRITE_API_KEY not set: write routes are disabled.');
+  if (process.env.SHEET_CSV_URL) {
+    startSheetPoller(pool, process.env.SHEET_CSV_URL, { seconds: Number(process.env.SHEET_POLL_SECONDS ?? 60) });
+    console.log('Polling the Google Sheet for changes.');
+  }
   createServer(store, { pool, writeApiKey, readApiKey: process.env.READ_API_KEY }).listen(PORT, () => {
     console.log(`Dashboard API on http://localhost:${PORT} (timezone ${TIMEZONE})`);
   });
