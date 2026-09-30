@@ -50,6 +50,7 @@ import {
   FLARE_THRESHOLD,
   SYMPTOM_WINDOWS,
 } from './analytics.js';
+import { weeklyReview } from './review.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*';
@@ -284,6 +285,12 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         done: todos.filter((t) => t.done).length,
         total: todos.filter((t) => t.status !== 'skipped').length,
       };
+    },
+
+    // "This week" review: the 7 days ending ?end= (default today) vs the 7 before.
+    '/api/review': async (params) => {
+      const state = await store.get();
+      return { meta: meta(store, state), ...weeklyReview(state.daily, { end: dateParam(params, 'end') }) };
     },
 
     '/api/skin/photos': async () => {

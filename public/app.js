@@ -4,6 +4,7 @@ import { loadSkinPhotos } from './photos.js';
 import { loadTodos } from './todos.js';
 import { getKey, showLock } from './auth.js';
 import { startSyncStatus, refreshSyncStatus } from './status.js';
+import { loadReview } from './review.js';
 const API_BASE = window.SOMA_API_BASE ?? '';
 const API_KEY = getKey();
 
@@ -121,6 +122,7 @@ async function loadData({announce = false} = {}) {
   loadSkinPhotos();
   loadTodos();
   refreshSyncStatus();
+  loadReview();
   if (announce) showToast(state.source === 'api' ? 'INSTINCT data synced' : 'Preview data refreshed');
 }
 

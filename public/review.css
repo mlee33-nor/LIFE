@@ -1,0 +1,55 @@
+/* "This week" review card: under the to-dos on the Life tab; hidden on the Acne and Stomach tabs. */
+.review-card { padding: 20px 22px; border-radius: var(--radius-md, 18px); margin-bottom: 18px; }
+body[data-dashboard="acne"] .review-card, body[data-dashboard="stomach"] .review-card { display: none; }
+
+.review-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.review-head h2 { margin: 2px 0 0; }
+.review-logged { flex: 0 0 auto; padding: 4px 10px; border-radius: 99px; background: var(--sage-soft, #deebe3); color: var(--sage-dark, #355848); font-size: 12px; font-weight: 600; }
+
+.review-highlights { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; padding: 0; list-style: none; }
+.review-highlights li { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border: 1px solid var(--line, #e6e3da); border-radius: 99px; background: #faf8f3; font-size: 13px; }
+.review-highlights li::before { content: ""; width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--sage, #537b69); }
+
+.review-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.review-tile { display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 13px 14px; border: 1px solid var(--line, #e6e3da); border-radius: 14px; background: var(--card, #fffefa); }
+.review-tile.empty .review-value { color: var(--ink-soft, #6d7772); }
+.review-label { margin: 0; color: var(--ink-soft, #6d7772); font-size: 12px; font-weight: 600; }
+.review-value { font-family: Manrope, sans-serif; font-size: 24px; letter-spacing: -.6px; line-height: 1.15; }
+.review-value small { color: var(--ink-soft, #6d7772); font-family: "DM Sans", sans-serif; font-size: 13px; font-weight: 500; letter-spacing: 0; }
+.review-sub { margin: 0; color: var(--ink-soft, #6d7772); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.review-foot { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin-top: auto; padding-top: 4px; }
+
+.review-delta { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.review-delta.neutral { background: var(--blue-soft, #e2ebef); color: #4c6879; }
+.review-delta.good { background: var(--sage-soft, #deebe3); color: var(--sage-dark, #355848); }
+.review-delta.warn { background: var(--coral-soft, #f7e3de); color: #a55243; }
+.review-thin { color: var(--ink-soft, #6d7772); font-size: 12px; }
+
+.review-bar { display: block; height: 6px; margin-top: 6px; overflow: hidden; border-radius: 99px; background: var(--line, #e6e3da); }
+.review-bar span { display: block; height: 100%; border-radius: 99px; background: var(--sage, #537b69); }
+
+.review-section { margin-top: 18px; }
+.review-section h3 { margin: 0 0 8px; font-size: 14px; }
+.review-pain { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.review-pain li { padding: 10px 12px; border: 1px solid var(--line, #e6e3da); border-left: 3px solid var(--coral, #d67968); border-radius: 12px; background: var(--card, #fffefa); font-size: 13px; }
+.review-pain-top { display: flex; align-items: center; gap: 8px; }
+.review-pain p { margin: 3px 0 0; color: var(--ink, #26332e); line-height: 1.45; }
+.review-pain em { color: var(--ink-soft, #6d7772); font-style: normal; font-size: 12px; }
+.review-pain small { display: block; margin-top: 3px; color: var(--ink-soft, #6d7772); font-size: 12px; }
+.review-score { padding: 1px 7px; border-radius: 99px; background: var(--coral-soft, #f7e3de); color: #a55243; font-size: 11.5px; font-weight: 600; }
+
+.review-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; padding: 0; list-style: none; }
+.review-chips li { padding: 4px 10px; border-radius: 99px; background: var(--sage-soft, #deebe3); color: var(--sage-dark, #355848); font-size: 12.5px; }
+.review-chips li span { opacity: .7; }
+
+.review-empty { margin: 12px 0 0; }
+.review-note { margin: 16px 0 0; padding-top: 10px; border-top: 1px solid var(--line, #e6e3da); color: var(--ink-soft, #6d7772); font-size: 11.5px; }
+
+@media (max-width: 800px) { .review-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 580px) {
+  .review-card { padding: 18px 15px; }
+  .review-tile { padding: 11px 12px; }
+  .review-value { font-size: 21px; }
+  .review-highlights { display: grid; gap: 5px; }
+  .review-highlights li { padding: 0; border: 0; background: none; font-size: 13px; }
+}
