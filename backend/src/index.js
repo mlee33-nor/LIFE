@@ -385,6 +385,38 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         return;
       }
 
+      // Owner actions from the dashboard (add / tick off to-dos). Need the
+      // dashboard password (READ_API_KEY) or the agent key; never open.
+      if (req.method === 'POST' && /^\/api\/todos(\/[^/]+)?$/.test(url.pathname)) {
+        const owner = (readApiKey && checkApiKey(req, readApiKey, url)) || checkApiKey(req, writeApiKey, url);
+        if (!owner) throw new HttpError(401, 'Missing or invalid API key');
+        const body = await readJson(req);
+        const id = decodeURIComponent(url.pathname.split('/')[3] ?? '');
+        const state = await store.get();
+        let data;
+        if (!id) {
+          // New task: { text, priority?, date? }
+          const text = String(body.text ?? '').trim();
+          if (!text) throw new ValidationError(['text is required']);
+          data = {
+            kind: 'todo', todo_id: `web-${Date.now().toString(36)}`, text, status: 'open',
+            priority: ['high', 'low'].includes(body.priority) ? body.priority : 'normal',
+            day: /^\d{4}-\d{2}-\d{2}$/.test(body.date ?? '') ? body.date : localDate(new Date()),
+          };
+        } else {
+          // Update: { status: open|done|skipped } — carry the task's text and
+          // day so this entry fully replaces the older version of the task.
+          if (!['open', 'done', 'skipped'].includes(body.status)) throw new ValidationError(['status must be open, done or skipped']);
+          const owning = state.daily.find((d) => d.todos.some((t) => t.id === id));
+          const current = owning?.todos.find((t) => t.id === id);
+          if (!current) throw new HttpError(404, `To-do ${id} not found`);
+          data = { kind: 'todo', todo_id: id, text: current.text, priority: current.priority, notes: current.notes, status: body.status, day: owning.date };
+        }
+        const entryId = await insertLog(pool, { tracker: 'life', at: null, data: { ...data, source: 'dashboard' } });
+        sendJson(res, 200, { ok: true, id: data.todo_id, entry: entryId, status: data.status });
+        return;
+      }
+
       if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed');
 
       if (url.pathname === '/') {

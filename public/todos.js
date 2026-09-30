@@ -23,10 +23,25 @@ export async function loadTodos() {
   render(el, data);
 }
 
+// Tick boxes only work with the dashboard password (the server checks it).
+const canEdit = () => Boolean(API_KEY);
+
+async function send(path, body) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${API_KEY}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
+}
+
 function item(t, extra = '') {
   const icon = t.status === 'done' ? '✓' : t.status === 'skipped' ? '–' : '';
+  const check = canEdit()
+    ? `<button type="button" class="todo-check" data-todo="${esc(t.id)}" data-next="${t.status === 'done' ? 'open' : 'done'}" aria-label="${t.status === 'done' ? 'Mark not done' : 'Mark done'}: ${esc(t.text)}">${icon}</button>`
+    : `<span class="todo-check" aria-hidden="true">${icon}</span>`;
   return `<li class="todo-item ${t.status} ${t.priority === 'high' ? 'high' : ''}">
-    <span class="todo-check" aria-hidden="true">${icon}</span>
+    ${check}
     <span class="todo-text"><strong>${esc(t.text)}</strong>${t.notes ? `<small>${esc(t.notes)}</small>` : ''}${extra}</span>
     ${t.priority === 'high' ? '<span class="todo-flag">Priority</span>' : ''}
     <span class="sr-only">${t.status === 'done' ? 'done' : t.status === 'skipped' ? 'skipped' : 'to do'}</span>
@@ -52,7 +67,23 @@ function render(el, data) {
     ${todos.length
       ? `<ul class="todo-list">${todos.map((t) => item(t)).join('')}</ul>`
       : `<p class="todo-empty">No to-dos for this day yet. Text INSTINCT something like “add to my to-dos: finish calculus” and it shows up here.</p>`}
+    ${canEdit() ? `<form class="todo-add" id="todo-add"><label for="todo-new" class="sr-only">New to-do</label><input id="todo-new" type="text" placeholder="Add a to-do for ${isToday ? 'today' : 'this day'}…" maxlength="200" required><select id="todo-priority" aria-label="Priority"><option value="normal">Normal</option><option value="high">High</option><option value="low">Low</option></select><button type="submit">Add</button></form><p class="todo-error" id="todo-error" role="alert"></p>` : ''}
     ${carried.length ? `<details class="todo-carried" ${todos.length ? '' : 'open'}><summary>${carried.length} unfinished from earlier days</summary><ul class="todo-list">${carried.map((t) => item(t, `<small>from ${esc(niceDate(t.from, { month: 'short', day: 'numeric' }))}</small>`)).join('')}</ul></details>` : ''}`;
+
+  const fail = (err) => { const p = el.querySelector('#todo-error'); if (p) p.textContent = `Couldn't save: ${err.message}`; };
+  el.querySelectorAll('[data-todo]').forEach((btn) => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try { await send(`/api/todos/${encodeURIComponent(btn.dataset.todo)}`, { status: btn.dataset.next }); loadTodos(); }
+    catch (err) { btn.disabled = false; fail(err); }
+  }));
+  el.querySelector('#todo-add')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = el.querySelector('#todo-new');
+    try {
+      await send('/api/todos', { text: input.value, priority: el.querySelector('#todo-priority').value, date });
+      loadTodos();
+    } catch (err) { fail(err); }
+  });
 
   el.querySelectorAll('[data-shift]').forEach((btn) => btn.addEventListener('click', () => {
     state.date = shift(date, Number(btn.dataset.shift));

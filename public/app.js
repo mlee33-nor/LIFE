@@ -2,8 +2,10 @@
 import { renderLifeAnalytics } from './life.js';
 import { loadSkinPhotos } from './photos.js';
 import { loadTodos } from './todos.js';
+import { getKey, showLock } from './auth.js';
+import { startSyncStatus, refreshSyncStatus } from './status.js';
 const API_BASE = window.SOMA_API_BASE ?? '';
-const API_KEY = window.SOMA_API_KEY ?? localStorage.getItem('soma-api-key') ?? '';
+const API_KEY = getKey();
 
 const rawSamples = [
   ['2026-09-25',1,3,6,3,5,72,24,['oatmeal','berries','salmon'],'Calm stomach and good energy.'],
@@ -75,6 +77,8 @@ function normalizeDay(day) {
 
 async function getJson(path) {
   const response = await fetch(`${API_BASE}${path}`, {headers:apiHeaders()});
+  // Locked: ask for the password instead of falling back to sample data.
+  if (response.status === 401) { showLock(); throw Object.assign(new Error('locked'), { locked: true }); }
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
   return response.json();
 }
@@ -100,7 +104,8 @@ async function loadData({announce = false} = {}) {
     state.focusCurve = focusCurveData;
     state.source = 'api';
     setSyncState('connected');
-  } catch {
+  } catch (err) {
+    if (err?.locked) return; // unlock screen is showing; don't render sample data
     state.days = sampleDays.map(normalizeDay).sort((a,b) => b.date.localeCompare(a.date));
     state.summary = null;
     state.foodInsights = null;
@@ -115,6 +120,7 @@ async function loadData({announce = false} = {}) {
   updateDataStatus();
   loadSkinPhotos();
   loadTodos();
+  refreshSyncStatus();
   if (announce) showToast(state.source === 'api' ? 'INSTINCT data synced' : 'Preview data refreshed');
 }
 
@@ -825,4 +831,4 @@ function wireInteractions() {
   const initial=location.hash.slice(1);showPanel(['overview','acne','stomach','journal','patterns','data'].includes(initial)?initial:'overview');
 }
 
-wireInteractions();renderAll();loadData();watchForUpdates();
+wireInteractions();renderAll();loadData();watchForUpdates();startSyncStatus();

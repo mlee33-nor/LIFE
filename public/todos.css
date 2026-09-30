@@ -24,3 +24,13 @@ body[data-dashboard="acne"] .todo-card, body[data-dashboard="stomach"] .todo-car
 .todo-carried { margin-top: 14px; }
 .todo-carried summary { cursor: pointer; font-size: 13px; color: var(--muted, #6b6b6b); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Editable (unlocked) state */
+button.todo-check { padding: 0; background: var(--card, #fff); color: #fff; cursor: pointer; min-width: 24px; min-height: 24px; }
+button.todo-check:hover { border-color: var(--sage, #4a7c59); }
+button.todo-check:focus-visible { outline: 3px solid var(--sage, #4a7c59); outline-offset: 2px; }
+.todo-add { display: flex; gap: 6px; margin-top: 12px; }
+.todo-add input { flex: 1; min-width: 0; padding: 9px 11px; border: 1px solid var(--line, #ddd); border-radius: 10px; background: var(--card, #fff); color: var(--ink, #222); font: inherit; }
+.todo-add select, .todo-add button { padding: 9px 11px; border: 1px solid var(--line, #ddd); border-radius: 10px; background: var(--card, #fff); color: var(--ink, #222); font: inherit; }
+.todo-add button { border-color: transparent; background: var(--ink, #222); color: var(--card, #fff); cursor: pointer; }
+.todo-error { min-height: 0; margin: 6px 0 0; color: #b3261e; font-size: 12px; }
