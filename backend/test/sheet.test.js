@@ -162,3 +162,20 @@ test('a directly uploaded photo does not hide the sheet photos from that day', (
   const kept = preferDirectEntries(events, localDate).map((e) => e.data.url);
   assert.deepEqual(kept, ['/api/photos/aaa', '/api/photos/bbb', '/api/photos/ccc']);
 });
+
+test('to-dos: sheet rows become a daily list, status updates in place, open ones carry over', () => {
+  const rows = csv(
+    'todo-20260901-1,2026-09-01,,America/Phoenix,Life,todo,task,Email Mr. Lee about the essay,high,,,open,,,,,,,,,,',
+    'todo-20260901-2,2026-09-01,,America/Phoenix,Life,todo,task,Clean room,,,,done,,,,,,,,,,',
+    'todo-20260902-1,2026-09-02,,America/Phoenix,Life,todo,task,Calculus problem set,,,,open,,,,,,,,,,',
+  );
+  const events = toEvents(mapSheetRows(rows));
+  const { daily } = interpret(events);
+  assert.deepEqual(daily[0].todos.map((t) => [t.text, t.status, t.priority]), [
+    ['Email Mr. Lee about the essay', 'open', 'high'],
+    ['Clean room', 'done', 'normal'],
+  ]);
+  // Marking it done through the API (same todo_id) updates it in place.
+  const later = interpret([...events, { id: '99', tracker: 'life', at: new Date('2026-09-01T20:00:00-07:00'), data: { kind: 'todo', todo_id: 'todo-20260901-1', done: true } }]);
+  assert.equal(later.daily[0].todos.find((t) => t.id === 'todo-20260901-1').status, 'done');
+});

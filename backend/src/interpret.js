@@ -123,6 +123,7 @@ function emptyDay(date) {
     ...Object.fromEntries(ACTIVITIES.map((a) => [`${a}_minutes`, 0])),
     hmwk_by_subject: {},
     goals: [],
+    todos: [],
     skin: { routines: 0, photos: 0, notes: [], locations: [], photo_list: [] },
     notes: [],
   };
@@ -191,6 +192,21 @@ export function interpret(events) {
         if (hours !== null && hours > 0 && hours <= MAX_SLEEP_HOURS) d.sleep_hours = Math.round(hours * 100) / 100;
       }
       lastBedtime = null;
+    } else if (e.tracker === 'life' && data.kind === 'todo' && (data.text || data.todo_id)) {
+      // Latest entry for a todo_id wins, so marking it done updates it in place.
+      const id = String(data.todo_id ?? e.id);
+      const prior = d.todos.find((t) => t.id === id);
+      const status = data.status ?? (data.done === true ? 'done' : prior?.status ?? 'open');
+      const todo = {
+        id,
+        text: data.text ?? prior?.text ?? null,
+        status,
+        done: status === 'done',
+        priority: data.priority ?? prior?.priority ?? 'normal',
+        notes: data.notes ?? prior?.notes ?? null,
+        at: prior?.at ?? localIso(e.at),
+      };
+      d.todos = d.todos.filter((t) => t.id !== id).concat(todo);
     } else if (e.tracker === 'life' && data.kind === 'goal') {
       // Latest version of a goal wins; progress is filled in below.
       d.goals = d.goals.filter((g) => g.label !== data.label);

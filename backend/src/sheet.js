@@ -42,6 +42,8 @@ export function parseCsv(text) {
   return body.map((r) => Object.fromEntries(keys.map((k, i) => [k, (r[i] ?? '').trim()])));
 }
 
+const todoPriority = (v) => (/high|urgent|!/i.test(v ?? '') ? 'high' : /low/i.test(v ?? '') ? 'low' : 'normal');
+
 // Direct image link for a photo row: the photo_url column, or source_url
 // inside a JSON photo_reference.
 function photoLink(row) {
@@ -100,6 +102,10 @@ function mapLifeRow(row, at) {
     add('', { kind: 'habit', habit: 'bedtime', value: null, text: row.status || null });
   } else if (category === 'symptom' && /headache/i.test(label)) {
     add('', { kind: 'headache', severity: null, text: row.notes || null });
+  } else if (category === 'todo') {
+    // One row per task; Instinct flips `status` to done/skipped on the same row.
+    const status = /done|complete/i.test(row.status) ? 'done' : /skip|cancel/i.test(row.status) ? 'skipped' : 'open';
+    add('', { kind: 'todo', todo_id: row.row_id, text: label || row.notes || null, status, priority: todoPriority(row.value), notes: row.notes || null });
   } else if (category === 'study_goal') {
     add('', {
       kind: 'goal', label: label || null,
@@ -217,6 +223,7 @@ function topic(e) {
   const detail = d.kind === 'session' ? d.activity
     : ['habit', 'miss'].includes(d.kind) ? d.habit
     : d.kind === 'photo' ? (d.url ?? d.source_url ?? d.sheet_row_id ?? Math.random())
+    : d.kind === 'todo' ? (d.todo_id ?? d.text ?? '')
     : '';
   return `${e.tracker}|${kind}|${detail ?? ''}`;
 }

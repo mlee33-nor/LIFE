@@ -178,6 +178,12 @@ Pearson correlations between each lifestyle metric and each symptom (stomach pai
 { "correlations": [{ "factor": "workout_minutes", "symptom": "stomach_pain", "lag_days": 0, "r": -0.25, "n": 45, "strength": "weak negative" }] }
 ```
 
+### `GET /api/todos?date=YYYY-MM-DD`
+
+A day's to-do list (default: today, Phoenix time), sorted open-first then by
+priority, plus `carried_over` (open tasks from earlier days, with `from`).
+`{date, todos:[{id, text, status: open|done|skipped, done, priority, notes}], carried_over, done, total}`
+
 ### `GET /api/feed?tracker=&from=&to=&limit=200`
 
 Raw events for an activity feed, newest first, with `at` in Phoenix time.

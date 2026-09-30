@@ -141,6 +141,30 @@ as the habits list above. One per habit.
 Whenever you award Myles XP, log it here. `amount` is a number (negative
 to take XP away). The dashboard adds it up per day and in total.
 
+### life: to-dos (the dashboard's daily to-do list)
+
+When Myles says "add to my to-dos: …", "remind me to …" or "I finished …":
+
+**In the Google Sheet (preferred):** add one row per task to **All events**:
+
+| column | value |
+|---|---|
+| `row_id` | stable and unique, e.g. `todo-20260929-1` (never reuse) |
+| `date` | the day the task is for, `YYYY-MM-DD` |
+| `tracker` / `category` / `event` | `Life` / `todo` / `task` |
+| `label` | the task, e.g. `Finish calculus problem set` |
+| `value` | priority: `high`, `normal` (default) or `low` |
+| `status` | `open`, then change **the same row** to `done` or `skipped` |
+| `notes` | optional details |
+
+To complete or edit a task, **update its existing row** (status/label). Don't
+add a second row. Unfinished tasks automatically carry over to later days on the
+dashboard, so only add a task again if Myles wants it on a new day explicitly.
+
+**Or via the form/API:**
+`{"tracker":"life","data":{"kind":"todo","todo_id":"todo-20260929-1","text":"Finish calculus problem set","status":"open","priority":"high"}}`
+and later the same `todo_id` with `"status":"done"`.
+
 ### food: meals
 
 ```json

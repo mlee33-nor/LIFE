@@ -263,6 +263,29 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
 
     // Face photos for before/after comparison: grouped by day, each tagged
     // with its angle (front/left/right) so the same angle can be compared.
+    // A day's to-do list, plus unfinished tasks carried over from earlier
+    // days (most recent first). Defaults to today in the app timezone.
+    '/api/todos': async (params) => {
+      const state = await store.get();
+      const date = dateParam(params, 'date') ?? localDate(new Date());
+      const day = state.daily.find((d) => d.date === date);
+      const rank = { high: 0, normal: 1, low: 2 };
+      const sort = (list) => [...list].sort((a, b) => Number(a.done) - Number(b.done) || rank[a.priority] - rank[b.priority]);
+      const todos = sort(day?.todos ?? []);
+      const carriedOver = state.daily
+        .filter((d) => d.date < date)
+        .flatMap((d) => d.todos.filter((t) => t.status === 'open').map((t) => ({ ...t, from: d.date })))
+        .sort((a, b) => b.from.localeCompare(a.from));
+      return {
+        meta: meta(store, state),
+        date,
+        todos,
+        carried_over: carriedOver,
+        done: todos.filter((t) => t.done).length,
+        total: todos.filter((t) => t.status !== 'skipped').length,
+      };
+    },
+
     '/api/skin/photos': async () => {
       const state = await store.get();
       const days = state.daily
