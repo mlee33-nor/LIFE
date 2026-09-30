@@ -92,7 +92,11 @@ export function weeklyReview(daily = [], { end } = {}) {
 
   // --- Stomach ------------------------------------------------------------
   const foodsOn = (date) => byDate.get(date)?.foods ?? [];
-  const reports = thisWeek.flatMap((d) => (d.pain_reports ?? []).map((r) => {
+  // A report of actual pain: scored above 0, or reported without a score.
+  // "No pain reported" entries (pain 0) are good days, not episodes.
+  const isPain = (r) => !isNum(r.pain) || r.pain > 0;
+  const painOf = (d) => (d.pain_reports ?? []).filter(isPain);
+  const reports = thisWeek.flatMap((d) => painOf(d).map((r) => {
     const sameDay = foodsOn(d.date);
     const dayBefore = foodsOn(addDays(d.date, -1));
     return {
@@ -107,7 +111,7 @@ export function weeklyReview(daily = [], { end } = {}) {
   }));
   const scores = reports.map((r) => r.pain).filter(isNum);
   const foodDays = thisWeek.filter((d) => (d.foods?.length ?? 0) > 0);
-  const painDates = new Set(daily.filter((d) => (d.pain_reports?.length ?? 0) > 0).map((d) => d.date));
+  const painDates = new Set(daily.filter((d) => painOf(d).length > 0).map((d) => d.date));
   let safeFoods = null;
   if (foodDays.length >= MIN_DAYS) {
     // A food is "no pain after" when, every time it was eaten, there was no
@@ -129,7 +133,7 @@ export function weeklyReview(daily = [], { end } = {}) {
   }
   const stomach = {
     reports: reports.length,
-    last_week_reports: lastWeek.reduce((n, d) => n + (d.pain_reports?.length ?? 0), 0),
+    last_week_reports: lastWeek.reduce((n, d) => n + painOf(d).length, 0),
     change_reports: null,
     scored_reports: scores.length,
     average_pain: avg(scores),

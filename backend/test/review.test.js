@@ -185,3 +185,16 @@ test('to-dos count done over total, skipping skipped', () => {
 test('highlights are empty when nothing is logged', () => {
   assert.deepEqual(weeklyReview([], { end: END }).highlights, []);
 });
+
+test('"no pain reported" entries are not counted as pain episodes', async () => {
+  const { weeklyReview } = await import('../src/review.js');
+  const mk = (date, reports) => ({ date, event_count: 1, foods: ['rice'], pain_reports: reports, xp: 0, todos: [], goals: [], hmwk_by_subject: {}, skin: {} });
+  const r = weeklyReview([
+    mk('2026-09-21', [{ at: '2026-09-21T12:00:00-07:00', pain: 0, text: 'no pain reported' }]),
+    mk('2026-09-22', [{ at: '2026-09-22T12:00:00-07:00', pain: null, text: 'after coffee' }]),
+    mk('2026-09-23', [{ at: '2026-09-23T12:00:00-07:00', pain: 5, text: 'cramps' }]),
+  ], { end: '2026-09-27' });
+  assert.equal(r.stomach.reports, 2);
+  assert.equal(r.stomach.average_pain, 5);
+  assert.deepEqual(r.stomach.pain_reports.map((p) => p.text), ['after coffee', 'cramps']);
+});
