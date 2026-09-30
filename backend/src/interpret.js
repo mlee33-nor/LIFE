@@ -157,7 +157,10 @@ export function interpret(events) {
 
   for (const e of events) {
     const data = e.data && typeof e.data === 'object' ? e.data : {};
-    const d = day(localDate(e.at));
+    // The sheet's date column (data.day) wins: it's the day an entry is credited
+    // to, e.g. 12:10 AM skincare counted toward Friday night.
+    const dayOfEvent = (ev) => (/^\d{4}-\d{2}-\d{2}$/.test(ev.data?.day ?? '') ? ev.data.day : localDate(ev.at));
+    const d = day(dayOfEvent(e));
     d.event_count++;
 
     if (e.tracker === 'life' && data.kind === 'session' && data.activity) {
@@ -169,7 +172,7 @@ export function interpret(events) {
         open.delete(key);
         const minutes = num(data.minutes) ?? (start ? (e.at - start.at) / 60000 : null);
         // Attribute the session to the day it started.
-        addSession(start ? day(localDate(start.at)) : d, data.activity, data.subject ?? null,
+        addSession(start ? day(dayOfEvent(start)) : d, data.activity, data.subject ?? null,
           minutes, start?.at ?? null, e.at, data.label ?? start?.data.label ?? null);
       } else if (num(data.minutes) !== null) {
         addSession(d, data.activity, data.subject ?? null, num(data.minutes), null, e.at, data.label ?? null);

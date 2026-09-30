@@ -179,3 +179,21 @@ test('to-dos: sheet rows become a daily list, status updates in place, open ones
   const later = interpret([...events, { id: '99', tracker: 'life', at: new Date('2026-09-01T20:00:00-07:00'), data: { kind: 'todo', todo_id: 'todo-20260901-1', done: true } }]);
   assert.equal(later.daily[0].todos.find((t) => t.id === 'todo-20260901-1').status, 'done');
 });
+
+test('a session crossing midnight pairs by its real timestamps and counts toward the sheet date', () => {
+  // Credited to Friday (date 2026-09-25) but it ended 2:00 AM Saturday.
+  const rows = csv(
+    'l-s,2026-09-25,18:00,America/Phoenix,Life,social,start,Allison,,,,reported_open,2026-09-25 18:00,,,,0,,,,,',
+    'l-e,2026-09-25,2:00,America/Phoenix,Life,social,end,Allison,,,,reported_end,2026-09-25 18:00,2026-09-26 2:00,480,480,0,,,,,',
+    'l-w1,2026-09-25,1:50,America/Phoenix,Life,work,start,AI development,,,,reported_open,2026-09-26 1:50,2026-09-26 2:10,,,0,,,,,',
+    'l-w2,2026-09-25,2:10,America/Phoenix,Life,work,end,AI development,,,,reported_end,2026-09-26 1:50,2026-09-26 2:10,20,20,0,,,,,',
+  );
+  const events = toEvents(mapSheetRows(rows)).sort((a, b) => a.at - b.at);
+  const { daily, activeSessions } = interpret(events);
+  assert.equal(daily.length, 1);
+  assert.equal(daily[0].date, '2026-09-25');
+  assert.equal(daily[0].social_minutes, 480); // one session, not two
+  assert.equal(daily[0].sessions.filter((s) => s.activity === 'social').length, 1);
+  assert.equal(daily[0].work_minutes, 20);
+  assert.equal(activeSessions.length, 0); // nothing left "open"
+});

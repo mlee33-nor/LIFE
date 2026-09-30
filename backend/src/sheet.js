@@ -71,10 +71,18 @@ function atFor(row) {
   return `${row.date}T${hhmm}:00-07:00`;
 }
 
+// Exact local timestamp from a start_at/end_at cell ("2026-09-26 2:00"), or
+// null. Needed for sessions that cross midnight, where `date` is the day the
+// session is credited to but the clock time belongs to the next day.
+function stampFor(value) {
+  const m = String(value ?? '').match(/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})/);
+  return m ? `${m[1]}T${m[2].padStart(2, '0')}:${m[3]}:00-07:00` : null;
+}
+
 // row -> [{ sheet_row_id, tracker, at, data }]
 function mapLifeRow(row, at) {
   const out = [];
-  const add = (suffix, data) => out.push({ key: row.row_id + suffix, tracker: 'life', at, data });
+  const add = (suffix, data) => out.push({ key: row.row_id + suffix, tracker: 'life', at, day: row.date, data });
   const category = row.category.toLowerCase();
   const label = row.label;
   const xp = num(row.xp_awarded);
@@ -87,11 +95,15 @@ function mapLifeRow(row, at) {
     // activities' labels are descriptions ("AI work", "Allison").
     const subject = activity === 'hmwk' && label ? label.toLowerCase() : null;
     const minutes = num(row.minutes_confirmed) ?? num(row.minutes_reported);
+    // Use the real start/end timestamps so start and end pair up correctly.
+    const exact = (stamp) => { if (stamp) out.at(-1).at = stamp; };
     if (row.event === 'end' || row.event === 'duration') {
       // End/duration rows carry the confirmed minutes; the sheet pairs start/end.
       add('', { kind: 'session', action: 'end', activity, subject, minutes, label: label || null });
+      exact(row.event === 'end' ? stampFor(row.end_at) : null);
     } else if (!/closed/.test(row.status)) {
       add('', { kind: 'session', action: 'start', activity, subject, minutes: null, label: label || null });
+      exact(stampFor(row.start_at));
     }
   } else if (category === 'miss' || row.outcome === 'miss') {
     add('', { kind: 'miss', habit: slug(label || category), text: row.notes || null });
@@ -127,7 +139,7 @@ function mapSkinRow(row, at) {
   const label = row.label.toLowerCase();
   if (row.status === 'not_reported' || row.status === 'pending' || SKIN_SKIP.test(label)) return [];
   const out = [];
-  const add = (tracker, data) => out.push({ key: row.row_id, tracker, at, data });
+  const add = (tracker, data) => out.push({ key: row.row_id, tracker, at, day: row.date, data });
   const yes = bool(row.value);
 
   if (SKIN_ROUTINES[label] && yes !== null) {
@@ -172,20 +184,19 @@ function mapFoodRows(rows) {
     const first = items[0];
     const at = atFor(first);
     const text = items.map((r) => [r.label, r.value].filter(Boolean).join(' (') + (r.value ? ')' : '')).join(', ');
-    out.push({ key: `meal:${mealId}`, tracker: 'food', at, data: { kind: 'meal', text, items: items.map((r) => r.label).filter(Boolean), pain: null, meal_id: mealId } });
+    out.push({ key: `meal:${mealId}`, tracker: 'food', at, day: first.date, data: { kind: 'meal', text, items: items.map((r) => r.label).filter(Boolean), pain: null, meal_id: mealId } });
 
     const pained = items.filter((r) => r.outcome === 'pain reported');
     if (pained.length) {
       const onset = num(pained[0].onset_minutes_approx);
-      out.push({
-        key: `pain:${mealId}`, tracker: 'food', at,
+      out.push({ key: `pain:${mealId}`, tracker: 'food', at, day: first.date,
         data: {
           kind: 'pain_report', pain: num(pained[0].severity_0_10) ?? null, meal_id: mealId,
           text: [`after ${pained.map((r) => r.label).join(', ')}`, onset ? `~${onset} min onset` : null].filter(Boolean).join(', '),
         },
       });
     } else if (items.some((r) => r.outcome === 'no pain reported') && !painDays.has(first.date)) {
-      out.push({ key: `pain:${mealId}`, tracker: 'food', at, data: { kind: 'pain_report', pain: 0, text: 'no pain reported', meal_id: mealId } });
+      out.push({ key: `pain:${mealId}`, tracker: 'food', at, day: first.date, data: { kind: 'pain_report', pain: 0, text: 'no pain reported', meal_id: mealId } });
     }
   }
   return out;
@@ -208,8 +219,10 @@ export function mapSheetRows(rows) {
     else if (tracker === 'skin') events.push(...mapSkinRow(row, atFor(row)));
   }
   events.push(...mapFoodRows(food));
-  return events.map(({ key, tracker, at, data }) => ({
-    tracker, at, data: { ...data, sheet_row_id: key, source: 'sheet' },
+  return events.map(({ key, tracker, at, day, data }) => ({
+    // `day` = the sheet's date column: the day this counts toward, which can
+    // differ from the clock time (e.g. 12:10 AM skincare credited to Friday).
+    tracker, at, data: { ...data, sheet_row_id: key, source: 'sheet', day },
   }));
 }
 
@@ -231,7 +244,7 @@ function topic(e) {
 // Sheet data is a backup: when entries about the same thing on the same day
 // came in through the API/form, drop the sheet's versions of them.
 export function preferDirectEntries(events, dayOf) {
-  const key = (e) => `${dayOf(e.at)}|${topic(e)}`;
+  const key = (e) => `${/^\d{4}-\d{2}-\d{2}$/.test(e.data?.day ?? '') ? e.data.day : dayOf(e.at)}|${topic(e)}`;
   const direct = new Set(events.filter((e) => e.data?.source !== 'sheet').map(key));
   if (direct.size === 0) return events;
   return events.filter((e) => e.data?.source !== 'sheet' || !direct.has(key(e)));
