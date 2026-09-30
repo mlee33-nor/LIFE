@@ -266,7 +266,7 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
     // with its angle (front/left/right) so the same angle can be compared.
     // A day's to-do list, plus unfinished tasks carried over from earlier
     // days (most recent first). Defaults to today in the app timezone.
-    '/api/todos': async (params) => {
+    '/api/todos': async (params, req) => {
       const state = await store.get();
       const date = dateParam(params, 'date') ?? localDate(new Date());
       const day = state.daily.find((d) => d.date === date);
@@ -284,6 +284,9 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         carried_over: carriedOver,
         done: todos.filter((t) => t.done).length,
         total: todos.filter((t) => t.status !== 'skipped').length,
+        // Whether this visitor may add/tick to-dos (same rule as POST /api/todos),
+        // so the page only shows tick boxes that will actually save.
+        can_edit: Boolean((readApiKey && checkApiKey(req, readApiKey)) || checkApiKey(req, writeApiKey)),
       };
     },
 
@@ -471,7 +474,7 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
 
       const handler = routes[url.pathname];
       if (!handler) throw new HttpError(404, 'Not found');
-      sendJson(res, 200, await handler(url.searchParams));
+      sendJson(res, 200, await handler(url.searchParams, req));
     } catch (err) {
       sendError(res, err);
     }

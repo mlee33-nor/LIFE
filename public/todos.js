@@ -20,11 +20,12 @@ export async function loadTodos() {
     if (res.ok) data = await res.json();
   } catch { /* offline: show the empty state */ }
   if (data) state.date = data.date;
+  state.canEdit = Boolean(data?.can_edit);
   render(el, data);
 }
 
 // Tick boxes only work with the dashboard password (the server checks it).
-const canEdit = () => Boolean(API_KEY);
+const canEdit = () => state.canEdit; // decided by the server (see loadTodos)
 
 async function send(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
