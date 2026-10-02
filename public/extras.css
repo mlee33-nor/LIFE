@@ -4,8 +4,9 @@
 /* ---------- Where each card shows ---------- */
 .life-extras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-bottom: 25px; }
 body:not([data-dashboard="overview"]) .life-extras { display: none; }
-.pain-timeline-card { display: none; }
-body[data-dashboard="stomach"] .pain-timeline-card { display: block; }
+.pain-timeline-card, .caffeine-card { display: none; }
+body[data-dashboard="stomach"] .pain-timeline-card, body[data-dashboard="stomach"] .caffeine-card { display: block; }
+body:not([data-dashboard="overview"]) .nudges-card { display: none; }
 
 /* ---------- Decluttered Life layout ---------- */
 .life-top { margin-bottom: 18px; }
@@ -264,3 +265,27 @@ body[data-dashboard="acne"] .metric-compare-note, body[data-dashboard="stomach"]
 
 /* Weekly report text (review.js) */
 .review-report { margin: 0; padding: 12px 14px; border-left: 4px solid #7650cf; border-radius: 0 12px 12px 0; background: #faf6ff; font-size: 13.5px; line-height: 1.6; white-space: pre-line; }
+
+/* Heads up (nudges) */
+.nudges-card { margin-bottom: 18px; border-left: 6px solid #e8a33d; }
+.nudge-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.nudge-list li { display: flex; gap: 10px; align-items: baseline; font-size: 14px; line-height: 1.45; }
+.nudge-list li > span { flex: 0 0 20px; height: 20px; border-radius: 50%; background: #fbeed6; color: #8a5a00; font-weight: 800; text-align: center; line-height: 20px; font-size: 12px; }
+.nudge-list li.warn > span { background: #ffd7d2; color: #9b1c12; }
+
+/* Exam countdown */
+.countdown-row { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+.countdown-days { flex: 0 0 auto; min-width: 54px; padding: 6px 8px; border: 1.5px solid var(--ink); border-radius: 12px; background: #e0efff; text-align: center; }
+.countdown-days.soon { background: #ffd7d2; }
+.countdown-days strong { display: block; font-size: 22px; line-height: 1; font-family: 'Space Grotesk', sans-serif; }
+.countdown-days small { font-size: 11px; }
+
+/* Caffeine */
+.caffeine-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.caffeine-stats > div { padding: 14px; border-radius: 14px; background: #ffe6bd; }
+.caffeine-stats > div:nth-child(2) { background: #ffd7d2; }
+.caffeine-stats strong { display: block; font-size: 26px; font-family: 'Space Grotesk', sans-serif; }
+.caffeine-stats span { font-size: 12px; color: #5d5170; }
+.caffeine-days { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 12px; }
+.caffeine-days > li { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; padding-top: 12px; border-top: 1px dashed #d7c6e7; }
+@media (max-width: 580px) { .caffeine-days > li { grid-template-columns: 1fr; } }

@@ -42,11 +42,14 @@ row must also be in All events. To keep the numbers right:
 7. **Scores:** stomach pain 0-10 goes in the Food tab's `severity_0_10`; a
    headache score goes in the symptom row's `value`; an acne score uses a Skin
    row labelled `Acne severity` with `value` 0-10.
-8. **Check your work:** `GET /api/sync/issues` lists rows the dashboard couldn't
+8. **Exams:** one row per exam: `category=exam`, `label` = its name ("MAT 213
+   Midterm"), `value` = its date (YYYY-MM-DD), optional `unit` = subject. Set
+   `status=cancelled` if it's called off. The dashboard counts down to it.
+9. **Check your work:** `GET /api/sync/issues` lists rows the dashboard couldn't
    read (`skipped`, with the reason) and sessions that were started but never
    ended (`unclosed_sessions`). Fix those rows in the sheet.
 
-Useful read-only endpoints for texting Myles: `GET /api/recap` (today's
+Useful read-only endpoints for texting Myles: `GET /api/nudges` (what's off track right now; send its `text` during the day), `GET /api/countdown`, `GET /api/caffeine`, `GET /api/recap` (today's
 recap; `?date=YYYY-MM-DD` for another day), `GET /api/report/weekly` (the
 week, plain text), `GET /api/streaks`, `GET /api/revisit` (open math
 problems), `GET /api/doordash`.

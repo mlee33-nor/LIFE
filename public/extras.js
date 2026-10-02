@@ -18,12 +18,20 @@ const photoHref = (url) => (/^\/api\//.test(url) ? `${API_BASE}${url}${API_KEY ?
 // ---------- loading ----------
 export async function loadExtras({ days = [] } = {}) {
   store.days = days;
-  const [streaks, pain, issues, revisit] = await Promise.all([
+  const [streaks, pain, issues, revisit, nudges, countdown, caffeine] = await Promise.all([
     getOptional('/api/streaks'),
     getOptional('/api/food/pain-timeline?hours=3'),
     getOptional('/api/sync/issues'),
     getOptional('/api/revisit'),
+    getOptional('/api/nudges'),
+    getOptional('/api/countdown'),
+    getOptional('/api/caffeine'),
   ]);
+  store.nudges = nudges.ok ? nudges.data : null;
+  store.countdown = countdown.ok ? countdown.data : null;
+  store.caffeine = caffeine.ok ? caffeine.data : null;
+  renderNudges();
+  renderCaffeine();
   store.streaks = streaks.ok ? streaks.data : null;
   store.pain = pain.ok ? pain.data : null;
   store.issues = issues.ok ? issues.data : null;
@@ -111,6 +119,8 @@ function renderGoals() {
     if (goals.length) parts.push(`<section class="goal-block"><h3>Study goal today</h3>${goals.map((g) => goalBar({ label: g.label || canonicalSubject(g.subject), done: Number(g.done_minutes) || 0, target: Number(g.target_minutes), met: Number(g.done_minutes) >= Number(g.target_minutes) })).join('')}</section>`);
   }
 
+  parts.push(countdownBlock());
+
   const allHabits = (Array.isArray(s?.habits) ? s.habits : []).filter((h) => h?.habit);
   const live = allHabits.filter((h) => Number(h.current) > 0).slice(0, 5);
   const lapsed = allHabits.filter((h) => !(Number(h.current) > 0) && Number(h.best) > 1);
@@ -123,7 +133,7 @@ function renderGoals() {
     if (shields.size) parts.push(`<section class="goal-block"><h3>Shield days <span class="extra-thin">(don’t break streaks)</span></h3><ol class="shield-strip" aria-label="Last 14 days">${strip.map((d) => `<li class="${shields.has(d) ? 'on' : ''}" title="${esc(isoLabel(d, { weekday: 'short', month: 'short', day: 'numeric' }))}${shields.has(d) ? ': shield day' : ''}"><span aria-hidden="true">${shields.has(d) ? '🛡' : ''}</span><small>${Number(d.slice(8))}</small><span class="sr-only">${esc(isoLabel(d, { month: 'short', day: 'numeric' }))}${shields.has(d) ? ', shield day' : ''}</span></li>`).join('')}</ol></section>`);
   }
 
-  el.innerHTML = `${head('Today', 'Level, goals &amp; streaks')}${levelStrip()}${parts.length ? parts.join('') : empty('🔥', 'No goals or streaks yet', s === null ? 'Streaks show up here once MOTION starts tracking them. Set a study goal by texting MOTION something like “goal: 120 min of math today”.' : 'Set a study goal or log a habit two days in a row to start a streak.')}`;
+  el.innerHTML = `${head('Today', 'Level, goals &amp; streaks')}${levelStrip()}${parts.filter(Boolean).length ? parts.filter(Boolean).join('') : empty('🔥', 'No goals or streaks yet', s === null ? 'Streaks show up here once MOTION starts tracking them. Set a study goal by texting MOTION something like “goal: 120 min of math today”.' : 'Set a study goal or log a habit two days in a row to start a streak.')}`;
 }
 
 // ---------- Sleep ----------
@@ -273,3 +283,59 @@ function renderSyncHealth() {
 // First paint: loading states until loadExtras() answers.
 renderPainTimeline();
 renderSyncHealth();
+
+// ---------- Heads up (nudges) ----------
+// Only shown when something is off track right now; hidden otherwise.
+function renderNudges() {
+  const el = $('nudges-card');
+  if (!el) return;
+  const list = (Array.isArray(store.nudges?.nudges) ? store.nudges.nudges : []).filter((n) => n?.text && n.for !== 'motion');
+  el.hidden = !list.length;
+  if (!list.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `${head('Right now', 'Heads up')}<ul class="nudge-list">${list.map((n) => `<li class="${n.level === 'warn' ? 'warn' : ''}"><span aria-hidden="true">${n.level === 'warn' ? '!' : '•'}</span>${esc(n.text)}</li>`).join('')}</ul>`;
+}
+
+// ---------- Exam countdown (inside Goals & streaks) ----------
+function countdownBlock() {
+  const c = store.countdown;
+  if (c === undefined) return '';
+  const exams = (Array.isArray(c?.exams) ? c.exams : []).filter((e) => e?.date && isNum(e.days_left));
+  if (!exams.length) return `<section class="goal-block"><h3>Exam countdown</h3><p class="extra-thin">No exam date yet. Text MOTION something like “my math midterm is Oct 12” to start a countdown.</p></section>`;
+  return `<section class="goal-block"><h3>Exam countdown</h3>${exams.slice(0, 3).map((e) => {
+    const when = e.days_left === 0 ? 'today' : e.days_left === 1 ? 'tomorrow' : `in ${e.days_left} days`;
+    const pace = isNum(e.avg_per_day_last_7)
+      ? `${e.avg_per_day_last_7} min/day of ${esc(canonicalSubject(e.subject || 'study'))} this week${isNum(e.daily_target) ? ` · target ${e.daily_target}` : ''}`
+      : '';
+    const badge = e.on_pace === false ? ' · <b class="chip warn">behind pace</b>' : e.on_pace ? ' · <b class="chip good">on pace</b>' : '';
+    return `<div class="countdown-row"><div class="countdown-days ${e.days_left <= 3 ? 'soon' : ''}"><strong>${e.days_left}</strong><small>${e.days_left === 1 ? 'day' : 'days'}</small></div><div><strong>${esc(e.label)}</strong> <span class="extra-thin">${esc(isoLabel(e.date, { weekday: 'short', month: 'short', day: 'numeric' }))} · ${when}</span>${pace ? `<p class="extra-thin">${pace}${badge}</p>` : ''}</div></div>`;
+  }).join('')}</section>`;
+}
+
+// ---------- Caffeine (Stomach tab) ----------
+function renderCaffeine() {
+  const el = $('caffeine-card');
+  if (!el) return;
+  const c = store.caffeine;
+  const title = head('Stomach · sleep', 'Caffeine');
+  if (!c) { el.innerHTML = `${title}${empty('☕', 'Not available yet', 'Coffee, energy drinks and soda you log will show here with their timing.')}`; return; }
+  const days = (Array.isArray(c.days) ? c.days : []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  if (!days.length) { el.innerHTML = `${title}${empty('☕', 'No caffeine logged', 'Coffee, Dutch Bros, Coke and energy drinks you tell MOTION about show up here.')}`; return; }
+  const t = c.totals || {};
+  const sl = c.sleep || {};
+  const sleepLine = isNum(sl.avg_sleep_after_late) && isNum(sl.avg_sleep_without)
+    ? `Sleep after caffeine past ${clockLabel((c.late_hour ?? 15) * 60)}: <b>${sl.avg_sleep_after_late}h</b> vs <b>${sl.avg_sleep_without}h</b> otherwise.`
+    : `Sleep comparison needs ${plural(Number(sl.needs_more_nights) || 1, 'more night')} of data.`;
+  const dayItem = (d) => {
+    const items = (d.items || []).map((i) => `<li><span>${esc(String(i.label).replace(/\s*\([^)]*\)/g, ''))}</span><small>${esc(timeOf(i.at) || '')}${i.pain_after ? ' · <b class="chip warn">pain after</b>' : ''}</small></li>`).join('');
+    const bed = isNum(d.hours_before_bed) ? `<p class="extra-thin">${d.hours_before_bed}h before bed${isNum(d.sleep_hours) ? ` · slept ${d.sleep_hours}h` : ''}</p>` : '';
+    return `<li><div class="pain-when"><strong>${esc(isoLabel(d.date, { weekday: 'short', month: 'short', day: 'numeric' }))}</strong><span>${d.last ? `last at ${esc(d.last)}` : 'time not logged'}</span></div><div><ul class="pain-foods">${items}</ul>${bed}</div></li>`;
+  };
+  el.innerHTML = `${title}
+    <div class="caffeine-stats">
+      <div><strong>${Number(t.servings) || 0}</strong><span>${Number(t.servings) === 1 ? 'serving' : 'servings'} on ${plural(Number(t.days_with_caffeine) || 0, 'day')}</span></div>
+      <div><strong>${Number(t.followed_by_pain) || 0}</strong><span>followed by stomach pain within ${plural(Number(c.hours) || 3, 'hour')}</span></div>
+    </div>
+    <p class="extra-thin">${sleepLine}</p>
+    <ol class="caffeine-days">${days.slice(0, 7).map(dayItem).join('')}</ol>
+    <p class="extra-thin">Associations in your own logs, not medical conclusions.</p>`;
+}
