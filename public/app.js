@@ -178,7 +178,7 @@ function getBlueprint(days) {
   if (!scored.length) {
     return {
       has_data: false,
-      targets: { sleep_hours: { min: 7.5, optimal: 8.0 }, water_glasses: { min: 7, optimal: 8 }, habits_count: { min: 4, optimal: 6 }, study_cutoff_hour: '19:30', walking_minutes: { min: 15, optimal: 30 } },
+      targets: null,
       contrasts: []
     };
   }
@@ -194,33 +194,38 @@ function getBlueprint(days) {
     return vals.length ? round(vals.reduce((s, v) => s + Number(v), 0) / vals.length, 1) : null;
   };
 
-  const peakSleep = avg(peakDays, 'sleep_hours') ?? 8.0;
-  const flareSleep = avg(flareDays, 'sleep_hours') ?? 6.2;
-  const peakWater = avg(peakDays, 'water') ?? 8.0;
-  const flareWater = avg(flareDays, 'water') ?? 4.5;
-  const peakHabits = avg(peakDays, 'habits_done') ?? 5.5;
-  const flareHabits = avg(flareDays, 'habits_done') ?? 2.8;
-  const peakWalk = avg(peakDays, 'walk_minutes') ?? 25;
-  const flareWalk = avg(flareDays, 'walk_minutes') ?? 5;
+  const peakSleep = avg(peakDays, 'sleep_hours');
+  const flareSleep = avg(flareDays, 'sleep_hours');
+  const peakWater = avg(peakDays, 'water');
+  const flareWater = avg(flareDays, 'water');
+  const peakHabits = avg(peakDays, 'habits_done');
+  const flareHabits = avg(flareDays, 'habits_done');
+  const peakWalk = avg(peakDays, 'walk_minutes');
+  const flareWalk = avg(flareDays, 'walk_minutes');
+
+  const enough = n >= 7;
+  const contrast = (factor, peak, flare, unit) => 
+    peak === null || flare === null ? null : { factor, peak: `${peak} ${unit}`.trim(), flare: `${flare} ${unit}`.trim(), delta: `${peak - flare >= 0 ? '+' : ''}${round(peak - flare, 1)} ${unit} on best days`.trim() };
 
   return {
     has_data: true,
+    enough_data: enough,
     sample_days: n,
     peak_days_count: peakDays.length,
     flare_days_count: flareDays.length,
-    targets: {
-      sleep_hours: { min: round(Math.max(6.5, peakSleep - 0.5), 1), optimal: peakSleep },
-      water_glasses: { min: Math.max(6, Math.floor(peakWater)), optimal: Math.ceil(peakWater) },
-      habits_count: { min: Math.max(3, Math.floor(peakHabits)), optimal: Math.ceil(peakHabits) },
-      walking_minutes: { min: 15, optimal: Math.max(20, Math.round(peakWalk)) },
+    targets: enough ? {
+      sleep_hours: peakSleep === null ? null : { min: round(Math.max(6.5, peakSleep - 0.5), 1), optimal: peakSleep },
+      water_glasses: peakWater === null ? null : { min: Math.max(6, Math.floor(peakWater)), optimal: Math.ceil(peakWater) },
+      habits_count: peakHabits === null ? null : { min: Math.max(3, Math.floor(peakHabits)), optimal: Math.ceil(peakHabits) },
+      walking_minutes: peakWalk === null ? null : { min: 15, optimal: Math.max(20, Math.round(peakWalk)) },
       study_cutoff_hour: '19:30'
-    },
-    contrasts: [
-      { factor: 'Sleep', peak: `${peakSleep} hrs`, flare: `${flareSleep} hrs`, delta: `+${round(peakSleep - flareSleep, 1)} hrs on best days` },
-      { factor: 'Water', peak: `${peakWater} glasses`, flare: `${flareWater} glasses`, delta: `+${round(peakWater - flareWater, 1)} glasses` },
-      { factor: 'Habits Completed', peak: `${peakHabits}`, flare: `${flareHabits}`, delta: `+${round(peakHabits - flareHabits, 1)} daily routines` },
-      { factor: 'Walking / Movement', peak: `${peakWalk} min`, flare: `${flareWalk} min`, delta: `+${round(peakWalk - flareWalk, 0)} min daily walk` }
-    ]
+    } : null,
+    contrasts: enough ? [
+      contrast('Sleep', peakSleep, flareSleep, 'hrs'),
+      contrast('Water', peakWater, flareWater, 'glasses'),
+      contrast('Habits Completed', peakHabits, flareHabits, ''),
+      contrast('Walking / Movement', peakWalk, flareWalk, 'min')
+    ].filter(Boolean) : []
   };
 }
 
@@ -366,38 +371,51 @@ function renderBlueprint() {
       </div>
     `).join('')}
   `;
-  $('#blueprint-takeaway').innerHTML = `<strong>Actionable Intelligence:</strong> Your top days show +1.8 hours more sleep and +3.5 glasses more water than flare days. All inputs are derived from your INSTINCT text check-ins.`;
+    const takeaway = $('#blueprint-takeaway');
+  if (takeaway) {
+    if (contrasts.length > 0) {
+      takeaway.innerHTML = `<strong>Actionable Intelligence:</strong> Focus on ${escapeHtml(contrasts[0].factor)} and ${escapeHtml(contrasts[1]?.factor || 'Habits')}. All inputs are derived from your INSTINCT text check-ins.`;
+    } else {
+      takeaway.innerHTML = '';
+    }
+  }
 }
 
 function renderPowerMove(todayLog, blueprint) {
   const container = $('#power-move');
   if (!container) return;
 
-  const targets = blueprint?.targets || {};
-  const waterOptimal = targets.water_glasses?.optimal ?? 8;
-  const currentWater = todayLog?.water ?? 0;
-  const habitsOptimal = targets.habits_count?.optimal ?? 5;
-  const currentHabits = todayLog?.habits_done ?? 0;
-  const studyCutoff = formatClock(targets.study_cutoff_hour ?? '19:30');
-
   let moveText = '';
   let moveFootnote = 'Calculated from your INSTINCT text check-ins.';
-
   const now = new Date();
   const currentHour = now.getHours();
 
-  if (currentWater < waterOptimal) {
-    const diff = waterOptimal - currentWater;
-    moveText = `You’re ${diff} ${diff === 1 ? 'glass' : 'glasses'} of water away from matching your Peak Day Blueprint.`;
-  } else if (currentHour >= 18) {
-    moveText = `Evening wind-down: Peak days finish study blocks before ${studyCutoff} to protect sleep quality.`;
-  } else if (currentHabits < habitsOptimal) {
-    const diff = habitsOptimal - currentHabits;
-    moveText = `Complete ${diff} more daily ${diff === 1 ? 'routine' : 'routines'} with INSTINCT to reach your peak baseline.`;
-  } else if (todayLog?.sessions?.some(s => s.minutes > 75)) {
-    moveText = `Deep focus block detected! Take a 15-minute walk to reset stamina and sustain evening energy.`;
+  if (blueprint?.enough_data && blueprint?.targets) {
+    const targets = blueprint.targets;
+    const waterOptimal = targets.water_glasses?.optimal ?? 8;
+    const currentWater = todayLog?.water ?? 0;
+    const habitsOptimal = targets.habits_count?.optimal ?? 5;
+    const currentHabits = todayLog?.habits_done ?? 0;
+    const studyCutoff = formatClock(targets.study_cutoff_hour ?? '19:30');
+
+    if (currentWater < waterOptimal) {
+      const diff = waterOptimal - currentWater;
+      moveText = `You’re ${diff} ${diff === 1 ? 'glass' : 'glasses'} of water away from matching your Peak Day Blueprint.`;
+    } else if (currentHour >= 18) {
+      moveText = `Evening wind-down: Peak days finish study blocks before ${studyCutoff} to protect sleep quality.`;
+    } else if (currentHabits < habitsOptimal) {
+      const diff = habitsOptimal - currentHabits;
+      moveText = `Complete ${diff} more daily ${diff === 1 ? 'routine' : 'routines'} with INSTINCT to reach your peak baseline.`;
+    } else if (todayLog?.sessions?.some(s => s.minutes > 75)) {
+      moveText = `Deep focus block detected! Take a 15-minute walk to reset stamina and sustain evening energy.`;
+    } else {
+      moveText = `Peak Day Blueprint targets matched today! Protect your evening wind-down to lock in tomorrow’s energy.`;
+    }
   } else {
-    moveText = `Peak Day Blueprint targets matched today! Protect your evening wind-down to lock in tomorrow’s energy.`;
+    moveText = `Log check-ins for 7 days to unlock your Peak Day Blueprint power moves.`;
+    if (todayLog?.sessions?.some(s => s.minutes > 75)) {
+      moveText = `Deep focus block detected! Take a 15-minute walk to reset stamina and sustain evening energy.`;
+    }
   }
 
   container.innerHTML = `
@@ -555,39 +573,10 @@ function getFoodCompass(days) {
 
   const triggers = [];
   const watchlist = [];
-  const triggerCandidates = [
-    { food: 'coffee', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 2.8, days_eaten: 3, lag_days: 1, confidence: 'high' },
-    { food: 'pizza', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 3.1, days_eaten: 2, lag_days: 1, confidence: 'high' },
-    { food: 'cheese', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 2.2, days_eaten: 3, lag_days: 1, confidence: 'moderate' },
-    { food: 'burger', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 2.0, days_eaten: 2, lag_days: 1, confidence: 'moderate' }
-  ];
-
-  for (const tc of triggerCandidates) {
-    if (allMeals.includes(tc.food)) triggers.push(tc);
-  }
-
-  const watchCandidates = [
-    { food: 'pasta', symptom: 'stomach_pain', difference: 0.8, days_eaten: 2 },
-    { food: 'toast', symptom: 'acne', difference: 0.6, days_eaten: 2 }
-  ];
-  for (const wc of watchCandidates) {
-    if (allMeals.includes(wc.food)) watchlist.push(wc);
-  }
-
   return {
-    safe_foods: safeFoods.length ? safeFoods : [
-      { food: 'oatmeal', eatenCount: 4, avgPain: 0.8, avgAcne: 1.2 },
-      { food: 'salmon', eatenCount: 3, avgPain: 0.5, avgAcne: 1.0 },
-      { food: 'berries', eatenCount: 3, avgPain: 0.7, avgAcne: 1.1 },
-      { food: 'rice', eatenCount: 4, avgPain: 1.1, avgAcne: 1.5 }
-    ],
-    confirmed_triggers: triggers.length ? triggers : [
-      { food: 'coffee', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 2.8, days_eaten: 3, lag_days: 1, confidence: 'high' },
-      { food: 'pizza', symptom: 'stomach_pain', symptom_label: 'Stomach discomfort', difference: 3.1, days_eaten: 2, lag_days: 1, confidence: 'high' }
-    ],
-    watchlist: watchlist.length ? watchlist : [
-      { food: 'pasta', symptom: 'stomach_pain', difference: 0.8, days_eaten: 2 }
-    ]
+    safe_foods: safeFoods,
+    confirmed_triggers: triggers,
+    watchlist: watchlist
   };
 }
 
