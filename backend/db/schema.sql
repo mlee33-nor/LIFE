@@ -60,3 +60,9 @@ CREATE TABLE IF NOT EXISTS photos (
 -- Corrected camera angle (front/left/right) for a photo, when the label it
 -- arrived with was wrong. Overrides the angle guessed from the label.
 ALTER TABLE photos ADD COLUMN IF NOT EXISTS angle TEXT CHECK (angle IN ('front', 'left', 'right'));
+
+-- Who soft-deleted an event: 'sheet' (its row left the sheet; restored if the
+-- row comes back) or 'api' (a deliberate correction; a re-sync never undoes it).
+ALTER TABLE events ADD COLUMN IF NOT EXISTS deleted_by TEXT;
+UPDATE events SET deleted_by = 'sheet'
+  WHERE deleted_at IS NOT NULL AND deleted_by IS NULL AND data ? 'sheet_row_id';

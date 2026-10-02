@@ -29,7 +29,7 @@ test('session start/end pairs into minutes by activity and subject', () => {
     ev(2, 'life', '2026-09-25T16:10:00-07:00', { kind: 'session', action: 'start', activity: 'hmwk', subject: 'math' }),
     ev(3, 'life', '2026-09-25T16:45:00-07:00', { kind: 'session', action: 'end', activity: 'hmwk', subject: 'history' }),
     ev(4, 'life', '2026-09-25T18:00:00-07:00', { kind: 'session', action: 'end', activity: 'workout', subject: null, minutes: 30 }),
-  ]);
+  ], { now: new Date('2026-09-25T19:00:00-07:00') });
   assert.equal(daily[0].hmwk_minutes, 45);
   assert.deepEqual(daily[0].hmwk_by_subject, { history: 45 });
   assert.equal(daily[0].workout_minutes, 30);

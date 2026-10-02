@@ -107,7 +107,7 @@ export async function listEntries(pool, params) {
 
 export async function softDelete(pool, id) {
   const { rowCount } = await pool.query(
-    'UPDATE events SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL',
+    "UPDATE events SET deleted_at = now(), deleted_by = 'api' WHERE id = $1 AND deleted_at IS NULL",
     [id]
   );
   return rowCount > 0;
@@ -124,13 +124,17 @@ export function checkApiKey(req, expected, url) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// Collects raw bytes and decodes once, so a multi-byte character split
+// across chunks isn't mangled. `limit` is in bytes.
 export async function readBody(req, limit = 100_000) {
-  let body = '';
+  const chunks = [];
+  let size = 0;
   for await (const chunk of req) {
-    body += chunk;
-    if (body.length > limit) throw Object.assign(new Error('Request body too large'), { status: 413 });
+    size += chunk.length;
+    if (size > limit) throw Object.assign(new Error('Request body too large'), { status: 413 });
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
-  return body;
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 export function parseJson(text) {

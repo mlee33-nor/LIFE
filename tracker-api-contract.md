@@ -1,6 +1,6 @@
-# Tracker Logging API — Instructions for Instinct
+# Tracker Logging API — Instructions for Hermes
 
-Instinct (Myles's AI message agent) logs tracker entries live as Myles texts
+Hermes (Myles's AI message agent) logs tracker entries live as Myles texts
 updates, e.g. "started history hmwk", "had a burrito", "stomach hurts, like
 a 6". Each message becomes one or more `POST /log` calls. The dashboard reads
 the same data, so **use the exact shapes below**. Anything else is stored but
@@ -12,7 +12,46 @@ won't show up on the dashboard.
 - Timezone: **America/Phoenix** (UTC-7, no daylight saving)
 - API key: shared privately; it is not in this file
 
-## Using the browser form (for Instinct)
+## Google Sheet rules (Hermes writes the sheet; the dashboard reads it every minute)
+
+The dashboard reads the **"All events"** tab, plus these side tabs for their
+extra columns: **DoorDash**, **Math revisitor**, **Emotion check-ins**,
+**Skin** (rows missing from All events are added) and **Food** (pain score
+`severity_0_10`, `eaten_at_local`). The Life tab is *not* read, so every Life
+row must also be in All events. To keep the numbers right:
+
+1. **One row per thing, one `row_id` each, never reused.** Edit a row in place
+   to correct it (e.g. flip a to-do's `status` to `done`) instead of adding a
+   second row with a new id for the same thing.
+2. **`date` is `YYYY-MM-DD`.** Use `credit_date` when an entry counts toward a
+   different day than it happened (e.g. 12:30 AM homework counted for the
+   evening before). Times are Phoenix time.
+3. **Close every session.** Each `start` needs a matching `end` (or `pause`)
+   row with the same `start_at`, plus `end_at` and `minutes_confirmed`. A start
+   left `open` for over 16 hours is listed as an unclosed session (see below)
+   and never counts. If a session was really only `N` minutes and has no end,
+   put `N` in the start row's `minutes_confirmed`.
+4. **Wake-ups:** `category=sleep, event=wake` (or `category=wake`) with the wake
+   time; put the bedtime in `start_at` and the sleep minutes in
+   `minutes_confirmed`. **Bedtime:** `category=sleep, event=sleep` (or `bed`).
+5. **Homework subject = the session `label`** ("Math", "History", "Geology").
+   Calculus counts toward a Math goal and Geology toward Science. A standing
+   daily target is `category=goal, event=daily_target`, `value` = minutes.
+6. **Numbers are plain numbers** — format spot counts, minutes and money cells
+   as Number, not Time/Date (a 16 formatted as time shows up as `0:00`).
+7. **Scores:** stomach pain 0-10 goes in the Food tab's `severity_0_10`; a
+   headache score goes in the symptom row's `value`; an acne score uses a Skin
+   row labelled `Acne severity` with `value` 0-10.
+8. **Check your work:** `GET /api/sync/issues` lists rows the dashboard couldn't
+   read (`skipped`, with the reason) and sessions that were started but never
+   ended (`unclosed_sessions`). Fix those rows in the sheet.
+
+Useful read-only endpoints for texting Myles: `GET /api/recap` (today's
+recap; `?date=YYYY-MM-DD` for another day), `GET /api/report/weekly` (the
+week, plain text), `GET /api/streaks`, `GET /api/revisit` (open math
+problems), `GET /api/doordash`.
+
+## Using the browser form (for Hermes)
 
 Open **`https://api-production-2ace4.up.railway.app/submit`**:
 
@@ -33,7 +72,7 @@ the 10 latest entries with their ids. To remove a mistaken entry, submit
 ### Sending face photos (acne tracker)
 
 **Whenever Myles sends a face photo, upload the actual image** so it shows up
-on the dashboard. Links into Instinct's own file storage don't work, because
+on the dashboard. Links into Hermes's own file storage don't work, because
 the dashboard can't open them.
 
 - **Browser form:** on `/submit`, attach the image in the **Photo** field
@@ -234,5 +273,5 @@ To change an entry, delete it and log the corrected version.
 ## Non-goals
 
 - Single user (Myles), no accounts.
-- XP is awarded by Instinct and logged as `{kind:"xp"}` entries. Levels and
+- XP is awarded by Hermes and logged as `{kind:"xp"}` entries. Levels and
   streaks are calculated by the dashboard.

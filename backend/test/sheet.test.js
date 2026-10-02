@@ -108,9 +108,9 @@ test('a direct entry only replaces sheet entries about the same thing that day',
   ];
   const kept = preferDirectEntries(events, localDate);
   const keptSheet = kept.filter((e) => e.data.source === 'sheet').map((e) => e.data.text ?? e.data.activity ?? e.data.kind);
-  // Replaced: sheet lunch, sheet hmwk, sheet sunscreen. Kept: pain report,
-  // work session, xp, next-day meal. The stray note hides nothing.
-  assert.deepEqual(keptSheet.sort(), ['next day', 'pain_report', 'work', 'xp'].sort());
+  // Only the sheet's sunscreen is replaced (same habit, same day). A different
+  // meal, a different-length session, xp and the stray note hide nothing.
+  assert.deepEqual(keptSheet.sort(), ['hmwk', 'next day', 'pain_report', 'sheet lunch', 'work', 'xp'].sort());
 });
 
 test('duration rows count as sessions; mood keeps its wording', () => {

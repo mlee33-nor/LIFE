@@ -143,3 +143,60 @@ test('focusCurve computes peak window and stamina breakdown', async () => {
   assert.equal(fc.stamina_breakdown.optimal_45_to_75m, 1);
   assert.equal(fc.stamina_breakdown.extended_over_75m, 1);
 });
+
+test('optimalBlueprint targets keep min <= optimal <= max and invent no floors', async () => {
+  const { optimalBlueprint } = await import('../src/analytics.js');
+  const days = [];
+  for (let i = 0; i < 12; i++) {
+    // Peak days drink ~5 glasses and sleep ~6 h: the old code produced water {min:6, optimal:5}.
+    days.push(day(addDays('2026-09-01', i), {
+      stomach_pain: i < 6 ? 0 : 6, water: i < 6 ? 4 + (i % 3) : 1, sleep_hours: i < 6 ? 6 : 5, habits_done: i < 6 ? 2 : 1,
+    }));
+  }
+  const bp = optimalBlueprint(days);
+  for (const key of ['sleep_hours', 'water_glasses', 'habits_count']) {
+    const t = bp.targets[key];
+    assert.ok(t.min <= t.optimal && t.optimal <= t.max, `${key}: ${JSON.stringify(t)}`);
+  }
+  assert.equal(bp.targets.water_glasses.max, 6);
+  assert.ok(bp.targets.water_glasses.min <= 5);
+  assert.equal(bp.targets.sleep_hours.optimal, 6);
+  assert.equal(bp.targets.walking_minutes, null); // no walking logged
+  for (const c of bp.contrasts) for (const v of Object.values(c)) assert.ok(!/ {2}/.test(String(v)), v);
+  // Under 7 days: no targets at all.
+  assert.equal(optimalBlueprint(days.slice(0, 6)).targets, null);
+});
+
+test('foodCompass: a food followed by an unscored pain report is never safe', async () => {
+  const { foodCompass } = await import('../src/analytics.js');
+  const days = [];
+  for (let i = 0; i < 8; i++) {
+    const date = addDays('2026-09-01', i);
+    days.push(day(date, {
+      foods: ['toast', ...(i === 3 ? ['shrimp'] : []), ...(i === 5 ? ['shrimp'] : [])],
+      meals: [{ at: `${date}T12:00:00-07:00`, text: i === 3 || i === 5 ? 'toast and shrimp' : 'toast' }],
+      // Unscored reports only: no numeric stomach_pain anywhere.
+      pain_reports: i === 3 ? [{ at: `${date}T14:00:00-07:00`, pain: null, text: 'stomach hurts' }] : [],
+      stomach_pain: null,
+    }));
+  }
+  const fc = foodCompass(days);
+  assert.ok(!fc.safe_foods.some((f) => f.food === 'shrimp'));
+  assert.ok(!fc.safe_foods.some((f) => f.food === 'toast')); // toast also preceded that episode
+  assert.ok(fc.watchlist.some((w) => w.food === 'shrimp' && w.pain_episodes_after >= 1));
+});
+
+test('foodCompass does not call a food safe without follow-up data', async () => {
+  const { foodCompass } = await import('../src/analytics.js');
+  // Eaten twice, next days never logged -> unknown, not safe.
+  const fc = foodCompass([day('2026-09-01', { foods: ['kiwi'] }), day('2026-09-05', { foods: ['kiwi'] })]);
+  assert.deepEqual(fc.safe_foods, []);
+});
+
+test('focusCurve returns no peak window or advice without sessions', async () => {
+  const { focusCurve } = await import('../src/analytics.js');
+  const fc = focusCurve([day('2026-09-01', { sessions: [] })]);
+  assert.equal(fc.peak_window, null);
+  assert.equal(fc.advisory, null);
+  assert.equal(fc.sessions_counted, 0);
+});

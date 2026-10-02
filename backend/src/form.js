@@ -73,7 +73,8 @@ export function sendPage(res, status, opts) {
 
 async function recentEntries(store) {
   const state = await store.get();
-  return state.events.slice(-10).reverse().map((e) => ({ ...e, at: localIso(e.at) }));
+  // Most recently saved first (by id), so a backdated entry still shows up.
+  return [...state.events].sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 10).map((e) => ({ ...e, at: localIso(e.at) }));
 }
 
 export async function handleForm(req, res, { pool, store, writeApiKey }) {

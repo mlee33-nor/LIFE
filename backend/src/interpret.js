@@ -4,10 +4,10 @@
 
 export const TIMEZONE = process.env.APP_TIMEZONE || 'America/Phoenix';
 
-export const ACTIVITIES = ['work', 'hmwk', 'workout', 'walk', 'rest', 'social'];
+export const ACTIVITIES = ['work', 'hmwk', 'workout', 'walk', 'rest', 'social', 'chores', 'routine'];
 export const HABITS = [
   'water', 'meal', 'shower', 'room_clean', 'am_skincare', 'pm_skincare',
-  'sunscreen', 'morning_ritual', 'bedtime',
+  'sunscreen', 'brush_teeth', 'wash_face', 'get_dressed', 'breakfast', 'walk', 'bedtime',
 ];
 
 // Numeric per-day metrics, usable in /api/timeseries and correlations.
@@ -28,6 +28,15 @@ export const METRICS = [
 
 // A bedtime more than this long before a wake-up isn't counted as sleep.
 const MAX_SLEEP_HOURS = 16;
+// A session start older than this is stale: a later end doesn't pair with it,
+// and it isn't shown as "currently working on".
+const MAX_SESSION_MS = 16 * 3600000;
+// Homework subjects that count toward the same goal (Hermes counts Calculus
+// toward the Math target and Geology toward Science).
+const SUBJECT_GROUPS = [
+  ['math', 'calculus', 'calc', 'precalc', 'algebra', 'statistics', 'stats'],
+  ['science', 'geology', 'biology', 'chemistry', 'physics'],
+];
 
 const dayFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit',
@@ -93,8 +102,25 @@ function singular(w) {
   return w;
 }
 
-const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+// Numbers, including numbers sent as strings ("6") by an agent.
+const num = (v) => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string' && /^\s*-?\d+(\.\d+)?\s*$/.test(v)) return Number(v);
+  return null;
+};
 const sessionKey = (d) => `${d.activity}|${d.subject ?? ''}`;
+const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v ?? '');
+const hhmm = (d) => localIso(d).slice(11, 16);
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// Minutes on `subject` including subjects in the same group (math + calculus).
+function subjectMinutes(bySubject, subject) {
+  const group = SUBJECT_GROUPS.find((g) => g.includes(subject)) ?? [subject];
+  return Object.entries(bySubject)
+    .filter(([s]) => group.some((g) => s === g || s.split(' ').includes(g)))
+    .reduce((sum, [, m]) => sum + m, 0);
+}
 
 function emptyDay(date) {
   return {
@@ -104,8 +130,10 @@ function emptyDay(date) {
     pain_reports: [],
     acne: null,
     acne_spots: null,
+    new_spots: null,
     headache: null,
     headache_reports: [],
+    bedtime: null,
     wake_time: null,
     wake_hour: null,
     sleep_hours: null,
@@ -124,42 +152,49 @@ function emptyDay(date) {
     hmwk_by_subject: {},
     goals: [],
     todos: [],
+    moods: [],
+    shield: false,
+    life_notes: [],
+    doordash: null,
     skin: { routines: 0, photos: 0, notes: [], locations: [], photo_list: [] },
     notes: [],
   };
 }
 
 // events: [{ id, tracker, at: Date, data }] sorted by `at`.
-// Returns { daily, activeSessions }.
-export function interpret(events) {
+// Returns { daily, activeSessions, staleSessions, revisit }.
+export function interpret(events, { now = Date.now() } = {}) {
   const days = new Map();
   const day = (date) => {
     if (!days.has(date)) days.set(date, emptyDay(date));
     return days.get(date);
   };
   const open = new Map(); // sessionKey -> start event
+  const todos = new Map(); // todo_id -> { date, todo }
+  const revisit = new Map(); // problem row id -> problem
   let lastBedtime = null;
 
-  const addSession = (d, activity, subject, minutes, startAt, endAt, label = null) => {
+  const addSession = (d, activity, subject, minutes, startAt, endAt, label = null, extra = {}) => {
     if (minutes === null || minutes < 0) return;
     const m = Math.round(minutes);
     d.sessions.push({
       activity, subject, label, minutes: m,
       start: startAt ? localIso(startAt) : null,
       end: endAt ? localIso(endAt) : null,
+      ...extra,
     });
     if (ACTIVITIES.includes(activity)) d[`${activity}_minutes`] += m;
     if (activity === 'hmwk') {
-      const s = subject ?? 'other';
+      const s = subject ?? 'general';
       d.hmwk_by_subject[s] = (d.hmwk_by_subject[s] ?? 0) + m;
     }
   };
 
   for (const e of events) {
     const data = e.data && typeof e.data === 'object' ? e.data : {};
-    // The sheet's date column (data.day) wins: it's the day an entry is credited
-    // to, e.g. 12:10 AM skincare counted toward Friday night.
-    const dayOfEvent = (ev) => (/^\d{4}-\d{2}-\d{2}$/.test(ev.data?.day ?? '') ? ev.data.day : localDate(ev.at));
+    // The sheet's credited day (data.day) wins over the clock time, e.g.
+    // 12:10 AM skincare counted toward Friday.
+    const dayOfEvent = (ev) => (isDay(ev.data?.day) ? ev.data.day : localDate(ev.at));
     const d = day(dayOfEvent(e));
     d.event_count++;
 
@@ -168,12 +203,28 @@ export function interpret(events) {
       if (data.action === 'start') {
         open.set(key, e);
       } else if (data.action === 'end') {
-        const start = open.get(key);
-        open.delete(key);
-        const minutes = num(data.minutes) ?? (start ? (e.at - start.at) / 60000 : null);
-        // Attribute the session to the day it started.
-        addSession(start ? day(dayOfEvent(start)) : d, data.activity, data.subject ?? null,
-          minutes, start?.at ?? null, e.at, data.label ?? start?.data.label ?? null);
+        const startedAt = data.started_at ? new Date(data.started_at) : null;
+        const hasStart = startedAt && !Number.isNaN(startedAt.getTime());
+        // Pair with the open start only if it's this session's start: same
+        // start time when the end says, else started within MAX_SESSION_MS.
+        let start = open.get(key) ?? null;
+        if (start) {
+          const same = hasStart
+            ? Math.abs(start.at - startedAt) <= 5 * 60000
+            : e.at >= start.at && e.at - start.at <= MAX_SESSION_MS;
+          if (same) open.delete(key);
+          else start = null;
+        }
+        const from = start?.at ?? (hasStart ? startedAt : null);
+        let minutes = num(data.minutes);
+        if (minutes === null && from) {
+          const diff = (e.at - from) / 60000;
+          minutes = diff > 0 && diff * 60000 <= MAX_SESSION_MS ? diff : null;
+        }
+        // Credited day: the entry's own day if given (sheet), else the start's day.
+        const target = isDay(data.day) ? d : start ? day(dayOfEvent(start)) : d;
+        addSession(target, data.activity, data.subject ?? null, minutes, from, e.at,
+          data.label ?? start?.data.label ?? null, data.paused ? { paused: true } : {});
       } else if (num(data.minutes) !== null) {
         addSession(d, data.activity, data.subject ?? null, num(data.minutes), null, e.at, data.label ?? null);
       }
@@ -183,37 +234,48 @@ export function interpret(events) {
       if (num(data.value) !== null) h.value = (h.value ?? 0) + num(data.value);
       d.habits[data.habit] = h;
       if (data.habit === 'water') d.water = h.value ?? h.count;
-      if (data.habit === 'meal') d.meals_logged++;
+      // The sheet's "meal" habit is XP for a meal already in the food log.
+      if (data.habit === 'meal' && data.source !== 'sheet') d.meals_logged++;
       if (data.habit === 'bedtime') lastBedtime = e.at;
     } else if (e.tracker === 'life' && data.kind === 'wake') {
       // First wake-up of the day sets wake time; sleep runs from the last bedtime.
       if (d.wake_time === null) {
-        const hhmm = localIso(e.at).slice(11, 16);
-        d.wake_time = hhmm;
-        d.wake_hour = Math.round((Number(hhmm.slice(0, 2)) + Number(hhmm.slice(3)) / 60) * 100) / 100;
-        const hours = lastBedtime ? (e.at - lastBedtime) / 3600000 : null;
-        if (hours !== null && hours > 0 && hours <= MAX_SLEEP_HOURS) d.sleep_hours = Math.round(hours * 100) / 100;
+        d.wake_time = hhmm(e.at);
+        d.wake_hour = round2(Number(d.wake_time.slice(0, 2)) + Number(d.wake_time.slice(3)) / 60);
+        const bed = lastBedtime ?? (data.bedtime ? new Date(data.bedtime) : null);
+        const hours = bed ? (e.at - bed) / 3600000 : null;
+        if (hours !== null && hours > 0 && hours <= MAX_SLEEP_HOURS) {
+          d.sleep_hours = round2(hours);
+          d.bedtime = hhmm(bed);
+        } else if (num(data.sleep_minutes) > 0) {
+          d.sleep_hours = round2(num(data.sleep_minutes) / 60);
+        }
       }
       lastBedtime = null;
     } else if (e.tracker === 'life' && data.kind === 'todo' && (data.text || data.todo_id)) {
-      // Latest entry for a todo_id wins, so marking it done updates it in place.
+      // One to-do per todo_id across all days: it stays on the day it was
+      // added, and its latest update (even days later) sets the status.
       const id = String(data.todo_id ?? e.id);
-      const prior = d.todos.find((t) => t.id === id);
-      const status = data.status ?? (data.done === true ? 'done' : prior?.status ?? 'open');
-      const todo = {
-        id,
-        text: data.text ?? prior?.text ?? null,
-        status,
-        done: status === 'done',
-        priority: data.priority ?? prior?.priority ?? 'normal',
-        notes: data.notes ?? prior?.notes ?? null,
-        at: prior?.at ?? localIso(e.at),
-      };
-      d.todos = d.todos.filter((t) => t.id !== id).concat(todo);
+      const prior = todos.get(id)?.todo;
+      const status = data.status ?? (data.done === true ? 'done' : data.done === false ? 'open' : prior?.status ?? 'open');
+      todos.set(id, {
+        date: todos.get(id)?.date ?? d.date,
+        todo: {
+          id,
+          text: data.text ?? prior?.text ?? null,
+          status,
+          done: status === 'done',
+          priority: data.priority ?? prior?.priority ?? 'normal',
+          notes: data.notes ?? prior?.notes ?? null,
+          at: prior?.at ?? localIso(e.at),
+          ...(prior && status !== prior.status && { updated_at: localIso(e.at) }),
+        },
+      });
     } else if (e.tracker === 'life' && data.kind === 'goal') {
       // Latest version of a goal wins; progress is filled in below.
-      d.goals = d.goals.filter((g) => g.label !== data.label);
-      d.goals.push({ label: data.label ?? null, subject: data.subject ?? null, target_minutes: num(data.target_minutes) });
+      const id = data.subject ?? data.label;
+      d.goals = d.goals.filter((g) => (g.subject ?? g.label) !== id);
+      d.goals.push({ label: data.label ?? null, subject: data.subject ?? null, target_minutes: num(data.target_minutes), ...(data.standing && { standing: true }) });
     } else if (e.tracker === 'life' && data.kind === 'headache') {
       // Unscored reports are listed but don't set the 0-10 score.
       const severity = num(data.severity);
@@ -228,6 +290,40 @@ export function interpret(events) {
     } else if (e.tracker === 'life' && data.kind === 'xp' && num(data.amount) !== null) {
       d.xp += num(data.amount);
       d.xp_events.push({ at: localIso(e.at), amount: num(data.amount), reason: data.reason ?? null });
+    } else if (e.tracker === 'life' && data.kind === 'mood') {
+      const feelings = Array.isArray(data.feelings) && data.feelings.length
+        ? data.feelings
+        : String(data.text ?? data.mood ?? '').split(/\s*(?:;|,|\band\b)\s*/).map((f) => f.trim().toLowerCase()).filter(Boolean);
+      d.moods.push({ at: localIso(e.at), feelings, severity: num(data.severity), cause: data.cause ?? null, notes: data.note ?? data.notes ?? null });
+    } else if (e.tracker === 'life' && data.kind === 'shield') {
+      d.shield = true;
+    } else if (e.tracker === 'life' && ['life_note', 'symptom', 'note'].includes(data.kind) && data.text) {
+      d.life_notes.push({ at: localIso(e.at), kind: data.note_kind ?? data.kind, text: data.text });
+    } else if (e.tracker === 'life' && data.kind === 'mb') {
+      d.mb = (d.mb ?? 0) + 1;
+    } else if (e.tracker === 'life' && (data.kind === 'dash' || data.kind === 'dash_expense')) {
+      const dd = (d.doordash ??= { shifts: [], pay: 0, net_profit: 0, miles: 0, minutes: 0, gas_cost: 0, expenses: 0 });
+      if (data.kind === 'dash') {
+        const shift = {
+          row_id: data.sheet_row_id ?? e.id, label: data.label ?? null, start: data.start ?? localIso(e.at), end: data.end ?? null,
+          minutes: num(data.minutes), pay: num(data.pay), offers: num(data.offers), miles: num(data.miles),
+          gas_cost: num(data.gas_cost), net_profit: num(data.net_profit), net_per_hour: num(data.net_per_hour),
+          net_per_mile: num(data.net_per_mile), note: data.note ?? null,
+        };
+        dd.shifts.push(shift);
+        for (const k of ['pay', 'net_profit', 'miles', 'minutes', 'gas_cost']) dd[k] = round2(dd[k] + (shift[k] ?? 0));
+      } else {
+        dd.expenses = round2(dd.expenses + (num(data.amount) ?? 0));
+      }
+      dd.net_after_expenses = round2(dd.net_profit - dd.expenses);
+    } else if (e.tracker === 'life' && data.kind === 'revisit') {
+      const id = String(data.sheet_row_id ?? data.problem_id ?? e.id);
+      revisit.set(id, {
+        row_id: id, date: d.date, topic: data.topic ?? null, problem_id: data.problem_id ?? null,
+        problem: data.problem ?? null, where_stuck: data.where_stuck ?? null, status: data.status ?? 'open',
+        revisited_at: data.revisited_at ?? null, mastered_at: data.mastered_at ?? null,
+        concept: Boolean(data.concept), photo_url: data.photo_url ?? null,
+      });
     } else if (e.tracker === 'food') {
       const pain = num(data.pain);
       if (pain !== null) d.stomach_pain = Math.max(d.stomach_pain ?? 0, pain);
@@ -248,6 +344,7 @@ export function interpret(events) {
       const severity = num(data.severity);
       if (severity !== null) d.acne = Math.max(d.acne ?? 0, severity);
       if (data.kind === 'spots' && num(data.count) !== null) d.acne_spots = Math.max(d.acne_spots ?? 0, num(data.count));
+      if (data.kind === 'new_spots' && num(data.count) !== null) d.new_spots = num(data.count);
       if (data.kind === 'zone_spots' && data.zone && num(data.count) !== null) {
         // Per-zone spot counts for the face map. Severity is estimated from
         // the count so zones can be shaded: 1-2 mild, 3-5 moderate, 6+ active.
@@ -271,24 +368,40 @@ export function interpret(events) {
     }
   }
 
+  for (const { date, todo } of todos.values()) day(date).todos.push(todo);
+
   const daily = [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const standing = new Map(); // standing goals carry forward to later days
   for (const d of daily) {
-    for (const g of d.goals) {
-      g.done_minutes = g.subject ? (d.hmwk_by_subject[g.subject] ?? 0) : null;
-      g.complete = g.target_minutes != null && g.done_minutes != null && g.done_minutes >= g.target_minutes;
+    for (const g of d.goals) if (g.standing) standing.set(g.subject ?? g.label, g);
+    for (const [id, g] of standing) {
+      if (!d.goals.some((x) => (x.subject ?? x.label) === id)) d.goals.push({ ...g, carried: true });
     }
+    d.goals = d.goals.map((g) => {
+      const done = g.subject ? subjectMinutes(d.hmwk_by_subject, g.subject) : null;
+      return { ...g, done_minutes: done, complete: g.target_minutes != null && done != null && done >= g.target_minutes };
+    });
     d.habits_done = Object.keys(d.habits).length;
     if (d.sleep_hours === null && d.reported_sleep_hours != null) d.sleep_hours = d.reported_sleep_hours;
     delete d.reported_sleep_hours;
+    // No total logged (or it was unreadable): add up the face-map zones.
+    if (d.acne_spots === null && d.skin.locations.length) d.acne_spots = d.skin.locations.reduce((s, l) => s + l.spots, 0);
   }
 
-  const activeSessions = [...open.values()].map((e) => ({
+  const session = (e) => ({
     id: e.id,
+    row_id: e.data.sheet_row_id ?? null,
     activity: e.data.activity,
     subject: e.data.subject ?? null,
     label: e.data.label ?? null,
     started_at: localIso(e.at),
-  }));
-
-  return { daily, activeSessions };
+  });
+  const starts = [...open.values()];
+  return {
+    daily,
+    activeSessions: starts.filter((e) => now - e.at <= MAX_SESSION_MS).map(session),
+    // Started but never ended: Hermes should close these.
+    staleSessions: starts.filter((e) => now - e.at > MAX_SESSION_MS).map(session),
+    revisit: [...revisit.values()].sort((a, b) => a.date.localeCompare(b.date)),
+  };
 }

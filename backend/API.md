@@ -1,10 +1,10 @@
 # Lifestyle Dashboard API
 
-Node + Postgres, deployed on Railway. Instinct (the AI message agent) writes events; the
+Node + Postgres, deployed on Railway. Hermes (the AI message agent) writes events; the
 dashboard UI reads interpreted data and insights.
 
 ```
-Instinct ─POST /log─▶  API  ──▶ Postgres (events table)
+Hermes ─POST /log─▶  API  ──▶ Postgres (events table)
 UI   ◀──/api/*────   API  ◀── LISTEN/NOTIFY (live updates)
 ```
 
@@ -13,7 +13,7 @@ local dates.
 
 ---
 
-## Part 1: Logging-agent routes (Instinct; full instructions in `../tracker-api-contract.md`)
+## Part 1: Logging-agent routes (Hermes; full instructions in `../tracker-api-contract.md`)
 
 Every request needs `Authorization: Bearer <WRITE_API_KEY>`, otherwise it
 gets a `401`.
@@ -52,7 +52,7 @@ JSON `{url, label, at}` (the server downloads it). Also available as the
 adds a skin event and appears in that day's `skin.photo_list`
 (`[{at, label, url, photo_id, external_ref}]`). Images are served at
 `url` = `/api/photos/<sha256>`, an address that can't be guessed. Sheet photo
-rows carry only `external_ref` (a private Instinct link that can't be shown).
+rows carry only `external_ref` (a private Hermes link that can't be shown).
 
 ### `POST /photos/<sha256>/angle`: fix a mislabeled photo
 
@@ -98,7 +98,7 @@ const es = new EventSource(`${API}/api/events`);
 es.addEventListener('data-updated', () => refetchEverything());
 ```
 
-This fires within about 0.5 s of Instinct writing anything.
+This fires within about 0.5 s of Hermes writing anything.
 
 ### `GET /api/summary?days=30&to=YYYY-MM-DD`
 
@@ -168,7 +168,7 @@ Possible trigger foods, sorted by `difference` (how much worse the symptom is af
 ] }, "acne": { ... }, "disclaimer": "..." }
 ```
 
-Food names are keywords pulled from Instinct's free-text meal descriptions, so expect some noise. Please show the disclaimer and `confidence`.
+Food names are keywords pulled from Hermes's free-text meal descriptions, so expect some noise. Please show the disclaimer and `confidence`.
 
 ### `GET /api/insights/lifestyle?from=&to=`
 
@@ -183,6 +183,19 @@ Pearson correlations between each lifestyle metric and each symptom (stomach pai
 A day's to-do list (default: today, Phoenix time), sorted open-first then by
 priority, plus `carried_over` (open tasks from earlier days, with `from`).
 `{date, todos:[{id, text, status: open|done|skipped, done, priority, notes}], carried_over, done, total}`
+
+### Hermes-facing extras (added 2026-10-01)
+
+- `GET /api/streaks?date=` — habit streaks (recovery-shield days don't break them) and the study goal: `{ habits:[{habit,current,best,done_today}], study_goal:{subject,target_minutes,today_minutes,met_today,current,best}|null, shields }`.
+- `GET /api/recap?date=` — `{ date, text, lines }`, a short plain-text recap of the day for Hermes to text.
+- `GET /api/report/weekly?end=` — `{ start, end, text, sections }`, the 7 days ending `end` vs the 7 before.
+- `GET /api/food/pain-timeline?hours=3` — each stomach-pain report with the foods eaten in the hours before, plus `suspects`.
+- `GET /api/doordash` — `{ shifts, days, weeks, totals }` from the DoorDash tab.
+- `GET /api/moods` — `{ checkins, top_feelings, average_severity }`.
+- `GET /api/revisit` — Math revisitor problems, open first: `{ open, problems }`.
+- `GET /api/sync/issues` — rows the sync couldn't read (`skipped`), photo download errors, and `unclosed_sessions` (started over 16h ago, never ended).
+- `GET /api/summary` also returns `level: { level, xp, level_start_xp, next_level_xp, progress }` (Hermes' rule: level = 1 + floor(sqrt(xp / 150))).
+- Day records in `/api/daily` also have `bedtime`, `new_spots`, `moods`, `shield`, `life_notes`, `doordash`, and `goals` (standing targets carry forward with `carried: true`).
 
 ### `GET /api/feed?tracker=&from=&to=&limit=200`
 
@@ -208,10 +221,13 @@ npm test
 
 ## Environment variables
 
+- `SHEET_TAB_GIDS` — comma-separated gids of side tabs (DoorDash, Math revisitor, Emotion check-ins, Skin, Food) merged into each sheet sync.
+
+
 | var | |
 |---|---|
 | `DATABASE_URL` | required. On Railway: `${{Postgres.DATABASE_URL}}` |
-| `WRITE_API_KEY` | required for the logging routes. A long random string, shared only with Instinct (`MUSE_API_KEY` is still accepted as a fallback) |
+| `WRITE_API_KEY` | required for the logging routes. A long random string, shared only with Hermes (`MUSE_API_KEY` is still accepted as a fallback) |
 | `READ_API_KEY` | optional. Locks the dashboard routes (recommended, since this is health data) |
 | `APP_TIMEZONE` | default `America/Phoenix` |
 | `CORS_ORIGIN` | default `*`. Set it to the UI's URL in production |

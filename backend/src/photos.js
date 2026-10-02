@@ -3,6 +3,8 @@
 // from a skin event so each photo appears on its day in the dashboard.
 
 import { createHash } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { parseIso, ValidationError } from './write.js';
 
 export const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
@@ -19,7 +21,29 @@ export async function readBuffer(req, limit = MAX_PHOTO_BYTES) {
   return Buffer.concat(chunks);
 }
 
+// True for loopback, private, link-local and other non-public addresses, so a
+// photo link can't be used to make the server fetch internal services.
+export function isPrivateAddress(ip) {
+  if (isIP(ip) === 6) {
+    const v6 = ip.toLowerCase();
+    if (v6.startsWith('::ffff:')) return isPrivateAddress(v6.slice(7));
+    return v6 === '::' || v6 === '::1' || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6);
+  }
+  const [a, b] = ip.split('.').map(Number);
+  return a === 0 || a === 10 || a === 127 || a >= 224
+    || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+async function assertPublicHost(hostname) {
+  const host = hostname.replace(/^\[|\]$/g, '');
+  const addresses = isIP(host) ? [{ address: host }] : await lookup(host, { all: true }).catch(() => []);
+  if (!addresses.length) throw new ValidationError([`could not resolve ${host}`]);
+  if (addresses.some((a) => isPrivateAddress(a.address))) throw new ValidationError(['url must point to a public host']);
+}
+
 // Downloads an image from a URL the agent provides (e.g. a share link).
+// Follows at most 5 redirects, each checked, and stops reading past 15 MB.
 export async function fetchImage(url) {
   let parsed;
   try {
@@ -27,16 +51,30 @@ export async function fetchImage(url) {
   } catch {
     throw new ValidationError(['url is not a valid URL']);
   }
-  if (!/^https?:$/.test(parsed.protocol)) throw new ValidationError(['url must be http(s)']);
-  const res = await fetch(parsed, { redirect: 'follow', signal: AbortSignal.timeout(20000) });
+  let res;
+  for (let hop = 0; ; hop++) {
+    if (!/^https?:$/.test(parsed.protocol)) throw new ValidationError(['url must be http(s)']);
+    await assertPublicHost(parsed.hostname);
+    res = await fetch(parsed, { redirect: 'manual', signal: AbortSignal.timeout(20000) });
+    if (res.status < 300 || res.status >= 400) break;
+    const next = res.headers.get('location');
+    if (!next || hop >= 5) throw new ValidationError(['photo link redirects too many times']);
+    parsed = new URL(next, parsed);
+  }
   const type = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
   if (!res.ok) throw new ValidationError([`could not download photo (HTTP ${res.status})`]);
   if (!IMAGE_TYPE.test(type)) {
     throw new ValidationError([`url returned ${type || 'unknown content'}, not an image (is the link public?)`]);
   }
-  const buffer = Buffer.from(await res.arrayBuffer());
-  if (buffer.length > MAX_PHOTO_BYTES) throw new ValidationError(['photo is larger than 15 MB']);
-  return { buffer, contentType: type };
+  if (Number(res.headers.get('content-length')) > MAX_PHOTO_BYTES) throw new ValidationError(['photo is larger than 15 MB']);
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of res.body) {
+    size += chunk.length;
+    if (size > MAX_PHOTO_BYTES) throw new ValidationError(['photo is larger than 15 MB']);
+    chunks.push(chunk);
+  }
+  return { buffer: Buffer.concat(chunks), contentType: type };
 }
 
 // Stores image bytes (deduplicated by content). Returns { id, url, duplicate }.
@@ -71,9 +109,16 @@ export async function savePhoto(pool, { buffer, contentType, label = null, at = 
   try {
     await client.query('BEGIN');
     const stored = await storePhotoBytes(client, { buffer, contentType, label, sourceUrl });
+    // Same image again: only add an entry if none is live (it may have been deleted).
     if (stored.duplicate) {
-      await client.query('ROLLBACK');
-      return stored;
+      const { rows: live } = await client.query(
+        `SELECT 1 FROM events WHERE deleted_at IS NULL AND data->>'kind' = 'photo' AND data->>'url' = $1 LIMIT 1`,
+        [stored.url]
+      );
+      if (live.length) {
+        await client.query('ROLLBACK');
+        return stored;
+      }
     }
     const id = stored.id;
     const sha256 = stored.url.split('/').pop();

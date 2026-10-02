@@ -51,6 +51,7 @@ import {
   SYMPTOM_WINDOWS,
 } from './analytics.js';
 import { weeklyReview } from './review.js';
+import { doordashSummary, level, moodSummary, painTimeline, recap, streaks, weeklyReport } from './extras.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*';
@@ -208,6 +209,7 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
       return {
         meta: meta(store, state),
         active_sessions: state.activeSessions,
+        level: level(state.daily.reduce((sum, d) => sum + (d.xp ?? 0), 0)),
         ...summary(state.daily, {
           days: intParam(params, 'days', 30),
           to: dateParam(params, 'to'),
@@ -309,6 +311,67 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         meta: meta(store, state),
         angles: [...new Set(days.flatMap((d) => d.photos.map((p) => p.angle).filter(Boolean)))],
         days,
+      };
+    },
+
+    // Goal progress and habit streaks (recovery-shield days don't break them).
+    '/api/streaks': async (params) => {
+      const state = await store.get();
+      return { meta: meta(store, state), ...streaks(state.daily, { today: dateParam(params, 'date') ?? localDate(new Date()) }) };
+    },
+
+    // Short plain-text recap of one day, for Hermes to text at night.
+    '/api/recap': async (params) => {
+      const state = await store.get();
+      return { meta: meta(store, state), ...recap(state.daily, { date: dateParam(params, 'date') ?? localDate(new Date()) }) };
+    },
+
+    // Plain-text weekly report: the 7 days ending ?end= vs the 7 before.
+    '/api/report/weekly': async (params) => {
+      const state = await store.get();
+      return { meta: meta(store, state), ...weeklyReport(state.daily, { end: dateParam(params, 'end') ?? localDate(new Date()) }) };
+    },
+
+    // Each stomach-pain report with what was eaten in the hours before it.
+    '/api/food/pain-timeline': async (params) => {
+      const state = await store.get();
+      return {
+        meta: meta(store, state),
+        disclaimer: 'Associations in your own logs, not medical conclusions.',
+        ...painTimeline(state.daily, { hours: intParam(params, 'hours', 3, { min: 1, max: 24 }) }),
+      };
+    },
+
+    '/api/doordash': async () => {
+      const state = await store.get();
+      return { meta: meta(store, state), ...doordashSummary(state.daily) };
+    },
+
+    '/api/moods': async () => {
+      const state = await store.get();
+      return { meta: meta(store, state), ...moodSummary(state.daily) };
+    },
+
+    // Math problems to come back to (open first).
+    '/api/revisit': async () => {
+      const state = await store.get();
+      const rank = { open: 0, revisited: 1, solved: 2, mastered: 3 };
+      const problems = [...state.revisit].sort((a, b) => (rank[a.status] ?? 1) - (rank[b.status] ?? 1) || b.date.localeCompare(a.date));
+      return { meta: meta(store, state), open: problems.filter((p) => p.status === 'open').length, problems };
+    },
+
+    // What Hermes wrote that the dashboard couldn't read, and sessions it
+    // started but never ended, so Hermes can fix them.
+    '/api/sync/issues': async () => {
+      const state = await store.get();
+      const status = await sheetSyncStatus();
+      return {
+        checked_at: status.last_synced_at ?? null,
+        last_error: status.last_error ?? null,
+        skipped: status.issues ?? [],
+        photo_errors: status.photo_errors ?? [],
+        removal_skipped: status.skipped_removal ?? null,
+        unclosed_sessions: state.staleSessions.map((s) => ({ row_id: s.row_id, activity: s.activity, subject: s.subject, started_at: s.started_at })),
       };
     },
 
@@ -511,7 +574,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const writeApiKey = process.env.WRITE_API_KEY || process.env.MUSE_API_KEY;
   if (!writeApiKey) console.warn('WRITE_API_KEY not set: write routes are disabled.');
   if (process.env.SHEET_CSV_URL) {
-    startSheetPoller(pool, process.env.SHEET_CSV_URL, { seconds: Number(process.env.SHEET_POLL_SECONDS ?? 60) });
+    startSheetPoller(pool, process.env.SHEET_CSV_URL, {
+      seconds: Number(process.env.SHEET_POLL_SECONDS ?? 60),
+      tabGids: (process.env.SHEET_TAB_GIDS ?? "").split(",").map((g) => g.trim()).filter(Boolean),
+    });
     console.log('Polling the Google Sheet for changes.');
   }
   createServer(store, { pool, writeApiKey, readApiKey: process.env.READ_API_KEY }).listen(PORT, () => {

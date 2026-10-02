@@ -1,7 +1,7 @@
 // Derived insights over the daily records produced by aggregateDaily().
 // These are simple associations over personal data, not medical findings.
 
-import { HABITS, METRICS, localDate } from './interpret.js';
+import { HABITS, METRICS, foodItem, foodKeywords, localDate } from './interpret.js';
 
 export const SYMPTOMS = ['stomach_pain', 'acne', 'headache'];
 
@@ -345,12 +345,29 @@ export function optimalBlueprint(daily) {
   const peakWalk = avgMetric(peakDays, 'walk_minutes');
   const flareWalk = avgMetric(flareDays, 'walk_minutes');
 
+  // Target band from the peak days themselves: lowest, average and highest
+  // measured value, so min <= optimal <= max always holds and nothing is a
+  // made-up floor.
+  const band = (days, key, dp = 0) => {
+    const vals = days.map((d) => d[key]).filter((v) => v !== null && v !== undefined && Number.isFinite(Number(v))).map(Number);
+    if (!vals.length) return null;
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const avg = mean(vals);
+    if (dp > 0) {
+      const optimal = round(avg, dp);
+      return { min: Math.min(round(lo, dp), optimal), optimal, max: Math.max(round(hi, dp), optimal) };
+    }
+    const optimal = Math.round(avg);
+    return { min: Math.min(Math.floor(lo), optimal), optimal, max: Math.max(Math.ceil(hi), optimal) };
+  };
+
   const extractCutoff = (days) => {
     const endMinutes = days.flatMap((d) => (d.sessions || []).filter((s) => s.activity === 'hmwk' || s.activity === 'work').map((s) => {
       if (!s.end) return null;
       const m = s.end.match(/T(\d{2}):(\d{2})/);
       return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-    })).filter(Boolean);
+    })).filter((m) => m !== null);
     if (!endMinutes.length) return null;
     const p75 = endMinutes.sort((a, b) => a - b)[Math.floor(endMinutes.length * 0.75)];
     const h = String(Math.floor(p75 / 60)).padStart(2, '0');
@@ -363,7 +380,12 @@ export function optimalBlueprint(daily) {
   const enough = n >= BLUEPRINT_MIN_DAYS;
   const contrast = (factor, peak, flare, unit) =>
     peak === null || flare === null ? null
-      : { factor, peak: `${peak} ${unit}`.trim(), flare: `${flare} ${unit}`.trim(), delta: `${peak - flare >= 0 ? '+' : ''}${round(peak - flare, 1)} ${unit} on best days`.trim() };
+      : {
+        factor,
+        peak: [peak, unit].filter((x) => x !== '').join(' '),
+        flare: [flare, unit].filter((x) => x !== '').join(' '),
+        delta: [`${peak - flare >= 0 ? '+' : ''}${round(peak - flare, 1)}`, unit, 'on best days'].filter((x) => x !== '').join(' '),
+      };
 
   return {
     has_data: true,
@@ -374,10 +396,11 @@ export function optimalBlueprint(daily) {
     flare_days_count: flareDays.length,
     // Targets only once there's enough data, and only for measured metrics.
     targets: enough ? {
-      sleep_hours: peakSleep === null ? null : { min: round(Math.max(6.5, peakSleep - 0.5), 1), optimal: peakSleep },
-      water_glasses: peakWater === null ? null : { min: Math.max(6, Math.floor(peakWater)), optimal: Math.ceil(peakWater) },
-      habits_count: peakHabits === null ? null : { min: Math.max(3, Math.floor(peakHabits)), optimal: Math.ceil(peakHabits) },
-      walking_minutes: peakWalk === null ? null : { min: 15, optimal: Math.max(20, Math.round(peakWalk)) },
+      sleep_hours: band(peakDays, 'sleep_hours', 1),
+      water_glasses: band(peakDays, 'water'),
+      habits_count: band(peakDays, 'habits_done'),
+      // No walking logged on the best days means no walking target.
+      walking_minutes: peakWalk ? band(peakDays, 'walk_minutes') : null,
       study_cutoff_hour: studyCutoff,
     } : null,
     contrasts: enough ? [
@@ -389,7 +412,35 @@ export function optimalBlueprint(daily) {
   };
 }
 
+// A stomach pain episode: a report scored above 0 or reported without a
+// score. "No pain" entries (pain 0) aren't episodes. Hand-built records with
+// only a day-level score count when that score is above 0.
+const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
+export const isPainReport = (r) => Boolean(r) && (!isNumber(r.pain) || r.pain > 0);
+export function painEpisodes(d) {
+  const reports = (d?.pain_reports ?? []).filter(isPainReport);
+  if (reports.length) return reports;
+  return isNumber(d?.stomach_pain) && d.stomach_pain > 0 ? [{ at: null, pain: d.stomach_pain, text: null }] : [];
+}
+
+const timeOf = (at) => {
+  const t = at ? Date.parse(at) : NaN;
+  return Number.isNaN(t) ? null : t;
+};
+
+// Times (ms) the day's meals containing `food` were eaten. Empty when meals
+// have no timestamps or the food can't be matched to a meal.
+function mealTimes(d, food) {
+  return (d.meals ?? []).filter((m) => {
+    const items = Array.isArray(m.items) ? m.items.map(foodItem) : foodKeywords(m.text);
+    return items.includes(food) || String(m.text ?? '').toLowerCase().includes(food);
+  }).map((m) => timeOf(m.at)).filter((t) => t !== null);
+}
+
 // Groups meals into Safe Baselines, Confirmed Triggers, and Watchlist.
+// A food "preceded" a pain episode when an episode was reported later the
+// same day (by timestamp) or any time the next day. Unscored reports count.
+// A food that preceded any episode is never safe.
 export function foodCompass(daily) {
   const triggers = foodTriggers(daily, { minDays: 2 });
   const allMeals = [...new Set(daily.flatMap((d) => d.foods || []))];
@@ -397,40 +448,51 @@ export function foodCompass(daily) {
 
   const foodStats = allMeals.map((food) => {
     let eatenCount = 0;
+    let followedUp = 0; // days eaten whose next day was logged
+    let episodesAfter = 0;
     let nextDayPainSum = 0;
     let nextDayPainCount = 0;
     let nextDayAcneSum = 0;
     let nextDayAcneCount = 0;
 
     for (const d of daily) {
-      if ((d.foods || []).includes(food)) {
-        eatenCount++;
-        const next1 = byDate.get(addDays(d.date, 1));
-        const next2 = byDate.get(addDays(d.date, 2));
-        if (next1 && next1.stomach_pain !== null) {
-          nextDayPainSum += next1.stomach_pain;
-          nextDayPainCount++;
-        }
-        if (next2 && next2.acne !== null) {
-          nextDayAcneSum += next2.acne;
-          nextDayAcneCount++;
-        }
+      if (!(d.foods || []).includes(food)) continue;
+      eatenCount++;
+      const next1 = byDate.get(addDays(d.date, 1));
+      const next2 = byDate.get(addDays(d.date, 2));
+      const eatenAt = mealTimes(d, food);
+      const sameDayAfter = eatenAt.length
+        ? painEpisodes(d).filter((r) => {
+          const t = timeOf(r.at);
+          return t !== null && eatenAt.some((e) => e <= t);
+        }).length
+        : 0;
+      episodesAfter += sameDayAfter + (next1 ? painEpisodes(next1).length : 0);
+      if (next1) followedUp++;
+      if (next1 && isNumber(next1.stomach_pain)) {
+        nextDayPainSum += next1.stomach_pain;
+        nextDayPainCount++;
+      }
+      if (next2 && isNumber(next2.acne)) {
+        nextDayAcneSum += next2.acne;
+        nextDayAcneCount++;
       }
     }
-
-    const avgPain = nextDayPainCount ? nextDayPainSum / nextDayPainCount : 0;
-    const avgAcne = nextDayAcneCount ? nextDayAcneSum / nextDayAcneCount : 0;
 
     return {
       food,
       eatenCount,
-      avgPain: round(avgPain, 1),
-      avgAcne: round(avgAcne, 1)
+      followed_up_days: followedUp,
+      pain_episodes_after: episodesAfter,
+      // null = no follow-up score logged, not "no pain".
+      avgPain: nextDayPainCount ? round(nextDayPainSum / nextDayPainCount, 1) : null,
+      avgAcne: nextDayAcneCount ? round(nextDayAcneSum / nextDayAcneCount, 1) : null,
     };
   });
 
   const safeFoods = foodStats
-    .filter((f) => f.eatenCount >= 2 && f.avgPain <= 1.5 && f.avgAcne <= 2.5)
+    .filter((f) => f.eatenCount >= 2 && f.followed_up_days >= 2 && f.pain_episodes_after === 0
+      && (f.avgPain === null || f.avgPain <= 1.5) && (f.avgAcne === null || f.avgAcne <= 2.5))
     .sort((a, b) => b.eatenCount - a.eatenCount);
 
   const confirmedTriggers = [];
@@ -463,10 +525,18 @@ export function foodCompass(daily) {
   const uniqueTriggers = [...new Map(confirmedTriggers.map((t) => [t.food, t])).values()]
     .sort((a, b) => b.difference - a.difference);
 
+  // Foods followed by pain episodes (including unscored ones) that the
+  // score-based comparison didn't flag still belong on the watchlist.
+  const flagged = new Set([...uniqueTriggers.map((t) => t.food), ...watchlist.map((w) => w.food)]);
+  const episodeWatch = foodStats
+    .filter((f) => f.pain_episodes_after > 0 && !flagged.has(f.food))
+    .sort((a, b) => b.pain_episodes_after - a.pain_episodes_after || b.eatenCount - a.eatenCount)
+    .map((f) => ({ food: f.food, symptom: 'stomach_pain', difference: null, days_eaten: f.eatenCount, pain_episodes_after: f.pain_episodes_after }));
+
   return {
     safe_foods: safeFoods,
     confirmed_triggers: uniqueTriggers,
-    watchlist: [...new Map(watchlist.map((w) => [w.food, w])).values()].slice(0, 5)
+    watchlist: [...new Map([...watchlist, ...episodeWatch].map((w) => [w.food, w])).values()].slice(0, 5)
   };
 }
 
@@ -499,7 +569,7 @@ export function focusCurve(daily) {
   }
 
   let maxWindowMins = 0;
-  let peakStart = 10;
+  let peakStart = null;
   for (let h = 6; h <= 18; h++) {
     const windowMins = hourly.slice(h, h + 4).reduce((sum, item) => sum + item.minutes, 0);
     if (windowMins > maxWindowMins) {
@@ -510,8 +580,11 @@ export function focusCurve(daily) {
 
   const formatHour = (h) => `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`;
 
+  const counted = shortCount + optimalCount + longCount;
   return {
-    peak_window: {
+    sessions_counted: counted,
+    // No timed sessions -> no peak window rather than a default one.
+    peak_window: peakStart === null ? null : {
       start_hour: peakStart,
       end_hour: peakStart + 4,
       label: `${formatHour(peakStart)} – ${formatHour(peakStart + 4)}`,
@@ -522,7 +595,7 @@ export function focusCurve(daily) {
       optimal_45_to_75m: optimalCount,
       extended_over_75m: longCount
     },
-    advisory: longCount > optimalCount
+    advisory: counted === 0 ? null : longCount > optimalCount
       ? 'More than half your study blocks exceed 75 minutes. Consider 5-minute movement resets to sustain focus.'
       : 'Great study block rhythm! Most sessions stay in the high-retention 45–75 minute zone.'
   };
