@@ -65,7 +65,7 @@ img { max-width: 100%; }
     transition: none;
   }
   .sidebar .brand, .sidebar-foot { display: none; }
-  .nav-list { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+  .nav-list { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
   .nav-item {
     flex-direction: column;
     justify-content: center;
@@ -82,11 +82,12 @@ img { max-width: 100%; }
     text-align: center;
     box-shadow: none;
   }
-  /* Short labels so six tabs fit one row without breaking words. The original
+  /* Short labels so all seven tabs fit one row without breaking words. The original
      text stays in the DOM (font-size 0) for screen readers. */
   .nav-item { font-size: 0; }
   .nav-item::after { content: attr(data-view); font-size: 10.5px; white-space: nowrap; }
   .nav-item[data-view="overview"]::after { content: "Life"; }
+  .nav-item[data-view="homework"]::after { content: "Study"; }
   .nav-item[data-view="acne"]::after { content: "Acne"; }
   .nav-item[data-view="stomach"]::after { content: "Stomach"; }
   .nav-item[data-view="journal"]::after { content: "Log"; }

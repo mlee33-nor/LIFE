@@ -26,6 +26,7 @@
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/play.css" />
     <link rel="stylesheet" href="/replay.css" />
+    <link rel="stylesheet" href="/homework.css" />
     <link rel="stylesheet" href="/photos.css" />
     <link rel="stylesheet" href="/todos.css" />
     <link rel="stylesheet" href="/auth.css" />
@@ -47,6 +48,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>
             Life
           </a>
+          <a class="nav-item" href="#homework" data-view="homework"><span aria-hidden="true">✎</span>Homework</a>
           <a class="nav-item" href="#acne" data-view="acne"><span aria-hidden="true">✿</span>Acne</a>
           <a class="nav-item" href="#stomach" data-view="stomach"><span aria-hidden="true">◉</span>Stomach</a>
           <a class="nav-item" href="#journal" data-view="journal">
@@ -261,6 +263,10 @@
             </div>
             <div class="recent-table" id="recent-table"></div>
           </article>
+        </section>
+
+        <section class="secondary-panel homework-panel" id="homework" data-panel="homework" hidden>
+          <div id="homework-dashboard" aria-live="polite"></div>
         </section>
 
         <section class="secondary-panel" id="journal" data-panel="journal" hidden>

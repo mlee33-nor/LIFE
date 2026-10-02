@@ -1,5 +1,6 @@
 // server.mjs proxies /api/* to the backend, so the API is same-origin by default.
 import { renderLifeAnalytics } from './life.js';
+import { renderHomeworkAnalytics } from './homework.js';
 import { loadSkinPhotos } from './photos.js';
 import { loadTodos } from './todos.js';
 import { getKey, showLock } from './auth.js';
@@ -69,7 +70,7 @@ function normalizeDay(day) {
     wake_time:day.wake_time ?? null, sleep_hours:day.sleep_hours ?? null,
     xp:maybeNum(day.xp), headache:maybeNum(day.headache), headache_reports:day.headache_reports||[], missed_habits:day.missed_habits||[], pain_reports:day.pain_reports||[], social_minutes:num(day.social_minutes), rest_minutes:num(day.rest_minutes),
     water:maybeNum(day.water), meals_logged:num(day.meals_logged), habits_done:num(day.habits_done),
-    work_minutes:num(day.work_minutes), hmwk_minutes:num(day.hmwk_minutes), workout_minutes:num(day.workout_minutes), walk_minutes:num(day.walk_minutes),
+    work_minutes:num(day.work_minutes), hmwk_minutes:num(day.hmwk_minutes), workout_minutes:num(day.workout_minutes), walk_minutes:num(day.walk_minutes), hmwk_by_subject:day.hmwk_by_subject||{},
     foods:Array.isArray(day.foods) ? day.foods : [], meals:Array.isArray(day.meals) ? day.meals : [],
     habits:day.habits && typeof day.habits === 'object' ? day.habits : {}, sessions:Array.isArray(day.sessions) ? day.sessions : [],
     skin:day.skin || {routines:0,photos:0,notes:[]}, notes:Array.isArray(day.notes) ? day.notes : []
@@ -148,6 +149,7 @@ function applyRange() {
 
 function renderAll() {
   renderLifeAnalytics(state.days, state.source);
+  renderHomeworkAnalytics(state.days, state.source);
   renderMetrics();
   renderQuests();
   renderBlueprint();
@@ -807,7 +809,7 @@ function setSyncState(mode) { const el=$('#sync-state');el.className=`sync-state
 function watchForUpdates() { if (!('EventSource' in window)) return;const key=API_KEY?`?key=${encodeURIComponent(API_KEY)}`:'';const events=new EventSource(`${API_BASE}/api/events${key}`);events.addEventListener('data-updated',()=>loadData());events.addEventListener('source-error',()=>setSyncState('sample')); }
 function showPanel(name) {
   const dashboard = ['overview','acne','stomach'].includes(name);
-  document.body.dataset.dashboard = dashboard ? name : '';
+  document.body.dataset.dashboard = dashboard ? name : (name === 'homework' ? 'homework' : '');
   $$('[data-panel]').forEach(panel=>{panel.hidden=panel.dataset.panel!==(dashboard?'overview':name);});
   $$('.nav-item').forEach(item=>item.classList.toggle('active',item.dataset.view===name));
   if (dashboard) {
@@ -818,6 +820,8 @@ function showPanel(name) {
     $('.chart-card h2').textContent = name==='acne'?'Skin through the week':'Stomach through the week';
     renderSignalsChart();
     renderRecent();
+  } else if (name === 'homework') {
+    $('h1').childNodes[0].textContent = 'Your study lab ';
   }
   $('.sidebar').classList.remove('open');$('.mobile-menu').setAttribute('aria-expanded','false');window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -839,7 +843,7 @@ function wireInteractions() {
     const span = $('#blueprint-toggle-contrast span');
     if (span) span.textContent = expanded ? 'Hide Peak vs Flare Contrast' : 'Peak vs Flare Contrast';
   });
-  const initial=location.hash.slice(1);showPanel(['overview','acne','stomach','journal','patterns','data'].includes(initial)?initial:'overview');
+  const initial=location.hash.slice(1);showPanel(['overview','homework','acne','stomach','journal','patterns','data'].includes(initial)?initial:'overview');
 }
 
 wireInteractions();renderAll();loadData();watchForUpdates();startSyncStatus();
