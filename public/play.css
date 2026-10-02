@@ -113,3 +113,4 @@ h1,h2,h3,.brand,.metric-value strong{font-family:'Space Grotesk',sans-serif}
   .blueprint-header{flex-direction:column;align-items:flex-start}
   .compass-header{flex-direction:column;align-items:flex-start}
 }
+.peak-streak{margin-top:10px;display:flex;align-items:center;gap:8px}.streak-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:12px;background:#f3eff8;color:#a295ad;font-size:11px;font-weight:700;border:1.5px solid #ebe4f2}.streak-badge.active{background:#ffefd6;color:#d97706;border-color:#fbbf24}.streak-caption{font-size:10px;color:var(--ink-soft);margin:0}

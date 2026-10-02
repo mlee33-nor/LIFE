@@ -428,6 +428,34 @@ function renderPowerMove(todayLog, blueprint) {
   `;
 }
 
+function getPeakStreak(days, blueprint) {
+  if (!blueprint?.targets) return 0;
+  const targets = blueprint.targets;
+  const waterOptimal = targets.water_glasses?.optimal ?? 8;
+  const sleepOptimal = targets.sleep_hours?.optimal ?? 8;
+  const habitsOptimal = targets.habits_count?.optimal ?? 5;
+  const walkOptimal = targets.walking_minutes?.optimal ?? 20;
+
+  let streak = 0;
+  // Evaluate up to the last 14 days
+  for (let i = 0; i < Math.min(days.length, 14); i++) {
+    const d = days[i];
+    let hits = 0;
+    if ((d.water ?? 0) >= waterOptimal) hits++;
+    if ((d.sleep_hours ?? 0) >= sleepOptimal) hits++;
+    if ((d.habits_done ?? 0) >= habitsOptimal) hits++;
+    if (((d.walk_minutes || 0) + (d.workout_minutes || 0)) >= walkOptimal) hits++;
+
+    if (hits >= 3) {
+      streak++;
+    } else {
+      if (i === 0) continue; // Give them today to finish
+      break;
+    }
+  }
+  return streak;
+}
+
 function renderQuests() {
   const today = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Phoenix',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const day = state.days.find(day => day.date === today);
@@ -443,9 +471,21 @@ function renderQuests() {
   $('#quest-date').textContent = 'Today';
   $('#quest-progress').innerHTML = `<span class="level-badge">LVL ${level}</span><div class="xp-info"><div class="xp-label"><span>${xp} check-in XP</span><span>${levelProgress}/100</span></div><div class="xp-track"><span style="width:${levelProgress}%"></span></div></div>`;
   $('#quest-progress').title = 'XP from your logs. Dashboard levels advance every 100 logged XP.';
+  
+  const blueprint = getBlueprint(state.days);
+  const streak = getPeakStreak(state.days, blueprint);
+  const peakContainer = $('#peak-streak');
+  if (peakContainer) {
+    if (blueprint?.enough_data && blueprint?.targets) {
+      peakContainer.innerHTML = `<div class="streak-badge ${streak > 0 ? 'active' : ''}"><span>🔥</span><strong>${streak} Day Peak Streak</strong></div><p class="streak-caption">Hits 3+ Blueprint targets</p>`;
+    } else {
+      peakContainer.innerHTML = '';
+    }
+  }
+
   $('#daily-quests').innerHTML = quests.map(q=>`<button type="button" class="quest-item ${q.done?'done':''}" title="${q.description}"><span class="quest-icon">${q.done?'✓':q.icon}</span><span><strong>${q.title}</strong><small>${q.description}</small></span><span class="quest-status">${q.done?'DONE':'TO DO'}</span></button>`).join('');
   $$('.quest-item').forEach((button,index)=>button.addEventListener('click',()=>showToast(quests[index].done?'Already completed today. Nice work!':quests[index].description)));
-  renderPowerMove(day, getBlueprint(state.days));
+  renderPowerMove(day, blueprint);
 }
 function splitPeriods(days) { const midpoint = Math.ceil(days.length / 2); return {current:days.slice(0,midpoint), previous:days.slice(midpoint)}; }
 function percentChange(current, previous) { return previous ? ((current - previous) / previous) * 100 : 0; }

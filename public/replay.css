@@ -21,3 +21,4 @@
 .time-caption{color:#a092af!important;line-height:1.7}
 @media(max-width:1200px){.time-columns{grid-template-columns:minmax(0,1fr)}.time-columns>.time-panel:last-child{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}.time-columns>.time-panel:last-child h3{grid-column:1/-1}}
 @media(max-width:580px){.time-columns>.time-panel:first-child{padding:15px}.replay-heading h3{font-size:23px!important}.replay-event{grid-template-columns:57px 15px minmax(0,1fr);gap:5px}.replay-clock strong{font-size:9px}.replay-event-body{padding:12px 10px}.replay-event-title{align-items:start;flex-direction:column;gap:5px}.replay-chart{padding:10px}.time-columns>.time-panel:last-child{display:block}}
+.replay-segment.ghost{background:#e3dbea;opacity:0.4;z-index:0;box-shadow:none;border:1px dashed #d0c8da;}
