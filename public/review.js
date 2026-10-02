@@ -2,6 +2,8 @@
 // next to last week's, only from what was logged. Where there isn't enough
 // data the card says so instead of showing a guess.
 
+import { canonicalSubject, getOptional, phoenixToday } from './util.js';
+
 const API_BASE = window.SOMA_API_BASE ?? '';
 const API_KEY = window.SOMA_API_KEY ?? (() => { try { return localStorage.getItem('soma-api-key') ?? ''; } catch { return ''; } })();
 
@@ -27,6 +29,18 @@ export async function loadReview() {
     if (res.ok) data = await res.json();
   } catch { /* offline: show the empty state */ }
   render(el, data);
+  // MOTION's plain-text weekly report for the same 7 days (may not exist yet).
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(data?.end ?? '') ? data.end : phoenixToday();
+  const report = await getOptional(`/api/report/weekly?end=${end}`);
+  const slot = el.querySelector('#weekly-report');
+  if (slot) slot.innerHTML = weeklyReport(report.ok ? report.data : null);
+}
+
+function weeklyReport(rep) {
+  const text = typeof rep?.text === 'string' ? rep.text.trim() : '';
+  const span = rep?.start && rep?.end ? `${fmtDate(rep.start, { month: 'short', day: 'numeric' })} – ${fmtDate(rep.end, { month: 'short', day: 'numeric' })}` : '';
+  if (!text) return `<h3>Weekly report</h3><p class="review-thin">MOTION’s weekly report shows up here once it’s available.</p>`;
+  return `<h3>Weekly report${span ? ` <span class="review-thin">· ${esc(span)}</span>` : ''}</h3><blockquote class="review-report">${esc(text)}</blockquote><p class="review-thin">The same text MOTION sends you at the end of the week.</p>`;
 }
 
 // Change vs last week. `fewerIsBetter` colours a drop green and a rise
@@ -53,7 +67,9 @@ function tile({ label, value, sub = '', foot = '', empty = false }) {
 function tiles(r) {
   const { xp, homework: hw, todos, acne, stomach, sleep } = r;
   const compareWhy = `${r.days_logged.last_week} of 7 days logged last week`;
-  const subjects = Object.entries(hw.by_subject).slice(0, 3).map(([s, m]) => `${esc(s)} ${minutes(m)}`).join(' · ');
+  const merged = {};
+  for (const [s, m] of Object.entries(hw.by_subject ?? {})) { const k = canonicalSubject(s); merged[k] = (merged[k] ?? 0) + (isNum(m) ? m : 0); }
+  const subjects = Object.entries(merged).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([s, m]) => `${esc(s)} ${minutes(m)}`).join(' · ');
   const pct = todos.total ? Math.round((todos.done / todos.total) * 100) : 0;
 
   return [
@@ -134,7 +150,7 @@ function safeFoods(stomach) {
 
 function render(el, r) {
   if (!r) {
-    el.innerHTML = '<div class="review-head"><div><p class="eyebrow">Review</p><h2>This week</h2></div></div><p class="review-thin review-empty">The weekly review isn’t available right now.</p>';
+    el.innerHTML = '<div class="review-head"><div><p class="eyebrow">Review</p><h2>This week</h2></div></div><p class="review-thin review-empty">The weekly review isn’t available right now.</p><div class="review-section" id="weekly-report"></div>';
     return;
   }
   const span = `${fmtDate(r.this_week.from, { month: 'short', day: 'numeric' })} – ${fmtDate(r.this_week.to, { month: 'short', day: 'numeric' })}`;
@@ -149,5 +165,6 @@ function render(el, r) {
     <div class="review-tiles">${tiles(r)}</div>
     ${painList(r.stomach)}
     ${safeFoods(r.stomach)}
+    <div class="review-section" id="weekly-report"><h3>Weekly report</h3><p class="review-thin">Loading…</p></div>
     <p class="review-note">Only counts what was logged. Days with no entries are left out, not treated as zero.</p>`;
 }

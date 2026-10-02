@@ -4,7 +4,7 @@
 
 const API_BASE = window.SOMA_API_BASE ?? '';
 const API_KEY = window.SOMA_API_KEY ?? (() => { try { return localStorage.getItem('soma-api-key') ?? ''; } catch { return ''; } })();
-const state = { days: [], before: null, after: null, angle: 'front', position: 50 };
+const state = { days: [], before: null, after: null, angle: 'front', position: 50, visible: false, loaded: false };
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const photoUrl = (url) => `${API_BASE}${url}${API_KEY ? `${url.includes('?') ? '&' : '?'}key=${encodeURIComponent(API_KEY)}` : ''}`;
@@ -29,12 +29,22 @@ export async function loadSkinPhotos() {
   const dates = state.days.map((d) => d.date);
   if (!dates.includes(state.before)) state.before = dates[0] ?? null;
   if (!dates.includes(state.after) || state.after === state.before) state.after = dates.at(-1) ?? null;
+  state.loaded = true;
   render(el);
 }
 
+// The card only shows on the Acne tab. Until then nothing is rendered, so no
+// photo (thumbnail or before/after) is downloaded while it's hidden.
+export function setPhotosVisible(visible) {
+  state.visible = Boolean(visible);
+  const el = document.getElementById('skin-photos');
+  if (el && state.visible && state.loaded) render(el);
+}
+
 function render(el) {
+  if (!state.visible) { el.innerHTML = ''; return; }
   if (!state.days.length) {
-    el.innerHTML = `${header('No face photos yet')}<p class="photo-empty">Face photos appear here once INSTINCT logs them with a photo link, or when one is uploaded on the log form.</p>`;
+    el.innerHTML = `${header('No face photos yet')}<p class="photo-empty">Face photos appear here once MOTION logs them with a photo link, or when one is uploaded on the log form.</p>`;
     return;
   }
   const before = state.days.find((d) => d.date === state.before);
@@ -63,9 +73,9 @@ function render(el) {
     <div class="photo-gallery">
       ${[...state.days].reverse().map((d) => `
         <div class="photo-day">
-          <div class="photo-day-head"><strong>${esc(niceDate(d.date, { weekday: 'long', month: 'short', day: 'numeric' }))}</strong><span>${d.spots != null ? `${d.spots} spots` : 'spots not counted'}</span></div>
+          <div class="photo-day-head"><strong>${esc(niceDate(d.date, { weekday: 'long', month: 'short', day: 'numeric' }))}</strong><span>${d.spots != null ? `${d.spots} ${d.spots === 1 ? 'spot' : 'spots'}` : 'spots not counted'}</span></div>
           <div class="photo-row">
-            ${d.photos.map((p) => `<a class="photo-thumb" href="${esc(photoUrl(p.url))}" target="_blank" rel="noopener" title="${esc(p.label || angleName(p.angle))}"><img src="${esc(photoUrl(p.url))}" alt="${esc(`${p.label || angleName(p.angle)}, ${niceDate(d.date)}`)}" loading="lazy"><span>${esc(angleName(p.angle))}</span></a>`).join('')}
+            ${d.photos.map((p) => `<a class="photo-thumb" href="${esc(photoUrl(p.url))}" target="_blank" rel="noopener" title="${esc(`${angleName(p.angle)} photo`)}"><img src="${esc(photoUrl(p.url))}" alt="${esc(`${angleName(p.angle)} photo, ${niceDate(d.date)}`)}" width="150" height="200" loading="lazy" decoding="async"><span>${esc(angleName(p.angle))}</span></a>`).join('')}
           </div>
         </div>`).join('')}
     </div>`;
@@ -81,11 +91,11 @@ function header(subtitle) {
 }
 
 function compare(before, after, b, a) {
-  const tag = (day) => `${niceDate(day.date)}${day.spots != null ? ` · ${day.spots} spots` : ''}`;
+  const tag = (day) => `${niceDate(day.date)}${day.spots != null ? ` · ${day.spots} ${day.spots === 1 ? 'spot' : 'spots'}` : ''}`;
   return `
     <div class="compare-stage" style="--pos:${state.position}%">
-      <img class="compare-img" src="${esc(photoUrl(a.url))}" alt="After: ${esc(tag(after))}" draggable="false">
-      <img class="compare-img compare-before" src="${esc(photoUrl(b.url))}" alt="Before: ${esc(tag(before))}" draggable="false">
+      <img class="compare-img" src="${esc(photoUrl(a.url))}" alt="After, ${esc(angleName(a.angle).toLowerCase())} photo: ${esc(tag(after))}" width="600" height="800" decoding="async" draggable="false">
+      <img class="compare-img compare-before" src="${esc(photoUrl(b.url))}" alt="Before, ${esc(angleName(b.angle).toLowerCase())} photo: ${esc(tag(before))}" width="600" height="800" decoding="async" draggable="false">
       <span class="compare-tag before">Before · ${esc(tag(before))}</span>
       <span class="compare-tag after">After · ${esc(tag(after))}</span>
       <div class="compare-divider" aria-hidden="true"><span class="compare-handle">⇆</span></div>

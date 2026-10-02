@@ -302,7 +302,8 @@ export function interpret(events, { now = Date.now() } = {}) {
     } else if (e.tracker === 'life' && data.kind === 'mb') {
       d.mb = (d.mb ?? 0) + 1;
     } else if (e.tracker === 'life' && (data.kind === 'dash' || data.kind === 'dash_expense')) {
-      const dd = (d.doordash ??= { shifts: [], pay: 0, net_profit: 0, miles: 0, minutes: 0, gas_cost: 0, expenses: 0 });
+      // Sums stay null until a value is reported (pay can be "pending").
+      const dd = (d.doordash ??= { shifts: [], pay: null, net_profit: null, miles: null, minutes: null, gas_cost: null, expenses: null });
       if (data.kind === 'dash') {
         const shift = {
           row_id: data.sheet_row_id ?? e.id, label: data.label ?? null, start: data.start ?? localIso(e.at), end: data.end ?? null,
@@ -311,11 +312,13 @@ export function interpret(events, { now = Date.now() } = {}) {
           net_per_mile: num(data.net_per_mile), note: data.note ?? null,
         };
         dd.shifts.push(shift);
-        for (const k of ['pay', 'net_profit', 'miles', 'minutes', 'gas_cost']) dd[k] = round2(dd[k] + (shift[k] ?? 0));
-      } else {
-        dd.expenses = round2(dd.expenses + (num(data.amount) ?? 0));
+        for (const k of ['pay', 'net_profit', 'miles', 'minutes', 'gas_cost']) {
+          if (shift[k] !== null) dd[k] = round2((dd[k] ?? 0) + shift[k]);
+        }
+      } else if (num(data.amount) !== null) {
+        dd.expenses = round2((dd.expenses ?? 0) + num(data.amount));
       }
-      dd.net_after_expenses = round2(dd.net_profit - dd.expenses);
+      dd.net_after_expenses = dd.net_profit === null ? null : round2(dd.net_profit - (dd.expenses ?? 0));
     } else if (e.tracker === 'life' && data.kind === 'revisit') {
       const id = String(data.sheet_row_id ?? data.problem_id ?? e.id);
       revisit.set(id, {

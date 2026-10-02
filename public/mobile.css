@@ -17,8 +17,8 @@ img { max-width: 100%; }
   .nav-list { width: 100%; gap: 8px; }
   .nav-item { flex-direction: column; justify-content: center; gap: 5px; min-height: 64px; padding: 9px 4px; font-size: 11px; line-height: 1.15; text-align: center; }
   .nav-item > span[aria-hidden] { font-size: 18px; line-height: 20px; }
-  .privacy-note, .profile-copy, .profile > svg { display: none; }
-  .profile { justify-content: center; }
+  
+  
   .topbar { flex-wrap: wrap; row-gap: 14px; }
   .topbar-copy { min-width: 0; }
   .primary-button { white-space: nowrap; }
@@ -64,7 +64,7 @@ img { max-width: 100%; }
     transform: none;
     transition: none;
   }
-  .sidebar .brand, .sidebar-foot { display: none; }
+  .sidebar .brand { display: none; }
   .nav-list { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
   .nav-item {
     flex-direction: column;
@@ -82,17 +82,19 @@ img { max-width: 100%; }
     text-align: center;
     box-shadow: none;
   }
-  /* Short labels so all seven tabs fit one row without breaking words. The original
-     text stays in the DOM (font-size 0) for screen readers. */
+  /* Short labels (max 6 letters) so all seven tabs fit one row at 360px+
+     without breaking words. The original text stays in the DOM (font-size 0)
+     for screen readers. */
   .nav-item { font-size: 0; }
   .nav-item::after { content: attr(data-view); font-size: 10.5px; white-space: nowrap; }
+  .nav-item { padding-left: 0; padding-right: 0; }
   .nav-item[data-view="overview"]::after { content: "Life"; }
   .nav-item[data-view="homework"]::after { content: "Study"; }
   .nav-item[data-view="acne"]::after { content: "Acne"; }
-  .nav-item[data-view="stomach"]::after { content: "Stomach"; }
+  .nav-item[data-view="stomach"]::after { content: "Gut"; }
   .nav-item[data-view="journal"]::after { content: "Log"; }
-  .nav-item[data-view="patterns"]::after { content: "Patterns"; }
-  .nav-item[data-view="data"]::after { content: "Data"; }
+  .nav-item[data-view="patterns"]::after { content: "Trends"; }
+  .nav-item[data-view="doordash"]::after { content: "Dash"; }
   .nav-item svg { width: 21px; height: 21px; flex: 0 0 auto; }
   .nav-item > span[aria-hidden] { display: grid; height: 21px; place-items: center; font-size: 17px; line-height: 1; }
   .nav-item:hover { background: transparent; }
@@ -156,5 +158,6 @@ img { max-width: 100%; }
 
 @media (max-width: 380px) {
   .nav-item::after { font-size: 9.5px; }
+  .nav-item svg { width: 19px; height: 19px; }
   .date-filter select { max-width: 130px; }
 }

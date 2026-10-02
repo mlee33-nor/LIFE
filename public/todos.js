@@ -1,5 +1,7 @@
+import { phoenixToday, shiftIso } from './util.js';
+
 // "Today's to-dos": the day's task list from GET /api/todos, written by
-// INSTINCT (sheet rows with category "todo", or entries on its log form).
+// MOTION (sheet rows with category "todo", or entries on its log form).
 // Unfinished tasks from earlier days are carried over below.
 
 const API_BASE = window.SOMA_API_BASE ?? '';
@@ -7,8 +9,8 @@ const API_KEY = window.SOMA_API_KEY ?? (() => { try { return localStorage.getIte
 const state = { date: null };
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const niceDate = (iso, opts = { weekday: 'long', month: 'short', day: 'numeric' }) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', opts);
-const shift = (iso, days) => { const d = new Date(`${iso}T12:00:00`); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
+const niceDate = (iso, opts = { weekday: 'long', month: 'short', day: 'numeric' }) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', ...opts });
+
 
 export async function loadTodos() {
   const el = document.getElementById('todo-card');
@@ -54,20 +56,21 @@ function render(el, data) {
   const todos = data?.todos ?? [];
   const carried = data?.carried_over ?? [];
   const pct = data?.total ? Math.round((data.done / data.total) * 100) : 0;
-  const isToday = date === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Phoenix' });
+  const today = phoenixToday();
+  const isToday = date === today;
 
   el.innerHTML = `
     <div class="todo-head">
       <div><p class="eyebrow">${isToday ? 'Today' : 'Day'} · ${esc(date ? niceDate(date) : '')}</p><h2>To-dos</h2></div>
       <div class="todo-nav">
         <button type="button" data-shift="-1" aria-label="Previous day">←</button>
-        <button type="button" data-shift="1" aria-label="Next day">→</button>
+        <button type="button" data-shift="1" aria-label="Next day" ${!date || date >= today ? 'disabled' : ''}>→</button>
       </div>
     </div>
     ${data?.total ? `<div class="todo-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Tasks done"><span style="width:${pct}%"></span></div><p class="todo-count">${data.done} of ${data.total} done</p>` : ''}
     ${todos.length
       ? `<ul class="todo-list">${todos.map((t) => item(t)).join('')}</ul>`
-      : `<p class="todo-empty">No to-dos for this day yet. Text INSTINCT something like “add to my to-dos: finish calculus” and it shows up here.</p>`}
+      : `<p class="todo-empty">No to-dos for this day yet. Text MOTION something like “add to my to-dos: finish calculus” and it shows up here.</p>`}
     ${canEdit() ? `<form class="todo-add" id="todo-add"><label for="todo-new" class="sr-only">New to-do</label><input id="todo-new" type="text" placeholder="Add a to-do for ${isToday ? 'today' : 'this day'}…" maxlength="200" required><select id="todo-priority" aria-label="Priority"><option value="normal">Normal</option><option value="high">High</option><option value="low">Low</option></select><button type="submit">Add</button></form><p class="todo-error" id="todo-error" role="alert"></p>` : ''}
     ${carried.length ? `<details class="todo-carried" ${todos.length ? '' : 'open'}><summary>${carried.length} unfinished from earlier days</summary><ul class="todo-list">${carried.map((t) => item(t, `<small>from ${esc(niceDate(t.from, { month: 'short', day: 'numeric' }))}</small>`)).join('')}</ul></details>` : ''}`;
 
@@ -87,7 +90,10 @@ function render(el, data) {
   });
 
   el.querySelectorAll('[data-shift]').forEach((btn) => btn.addEventListener('click', () => {
-    state.date = shift(date, Number(btn.dataset.shift));
+    if (!date) return;
+    const next = shiftIso(date, Number(btn.dataset.shift));
+    if (next > today) return; // never past today (Phoenix)
+    state.date = next;
     loadTodos();
   }));
 }

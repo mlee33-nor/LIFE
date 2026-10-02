@@ -73,7 +73,14 @@ http.createServer(async (request, response) => {
     });
     response.end(body);
   } catch (error) {
-    if (error.code !== 'ENOENT') console.error(error);
+    if (error.code !== 'ENOENT' && error.code !== 'EISDIR') console.error(error);
+    // Only extensionless paths (in-app routes) fall back to the page; a
+    // missing file such as /missing.js is a real 404, not index.html.
+    if (path.extname(pathname)) {
+      response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' });
+      response.end('Not found');
+      return;
+    }
     try {
       const body = await fs.readFile(path.join(root, 'index.html'));
       response.writeHead(200, { 'Content-Type': mime['.html'], 'Cache-Control': 'no-cache' });
