@@ -119,6 +119,16 @@ test('after-midnight rows credited to the evening before get the real clock date
   assert.equal(r.daily[0].date, '2026-09-25');
 });
 
+test('a time followed by a timezone name is not read as AM/PM', () => {
+  const r = run(csv(
+    'f1,2026-09-24,2026-09-24 18:12:26 America/Phoenix,,Food + stomach,food,reported,Sandwich,,,no pain reported,,,,,,,m1,,,,,,,',
+    'b1,2026-09-24,2:42 PM,,Life,bonus,bonus,shower,,,,reported,,,,,0,,,,,,,,',
+    'b2,2026-09-24,9:05 am,,Life,bonus,bonus,walk,,,,reported,,,,,0,,,,,,,,',
+  ));
+  const at = Object.fromEntries(r.events.map((e) => [e.data.sheet_row_id, e.at.toISOString().slice(11, 16)]));
+  assert.deepEqual([at['meal:2026-09-24|m1'], at.b1, at.b2], ['01:12', '21:42', '16:05']); // UTC = Phoenix + 7h
+});
+
 test('emotion, recovery shield, notes and MB go to their own places', () => {
   const r = run(csv(
     'm,2026-09-25,16:12,,Life,emotion,emotion,mood,stressed; overwhelmed,,,reported,,,,,0,,,,,,,,',

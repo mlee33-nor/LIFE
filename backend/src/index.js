@@ -51,6 +51,7 @@ import {
   SYMPTOM_WINDOWS,
 } from './analytics.js';
 import { weeklyReview } from './review.js';
+import { caffeine, countdown, nudges } from './coach.js';
 import { doordashSummary, level, moodSummary, painTimeline, recap, streaks, weeklyReport } from './extras.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -339,6 +340,39 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         meta: meta(store, state),
         disclaimer: 'Associations in your own logs, not medical conclusions.',
         ...painTimeline(state.daily, { hours: intParam(params, 'hours', 3, { min: 1, max: 24 }) }),
+      };
+    },
+
+    // What's off track right now; `text` is ready for MOTION to send.
+    '/api/nudges': async () => {
+      const state = await store.get();
+      const now = new Date();
+      // Re-split open sessions against the current time (the store may be minutes old).
+      const open = [...state.activeSessions, ...state.staleSessions];
+      const fresh = (s) => now - new Date(s.started_at) <= 16 * 3600000;
+      const status = await sheetSyncStatus();
+      return {
+        meta: meta(store, state),
+        ...nudges(state.daily, {
+          now, exams: state.exams, issues: status.issues ?? [],
+          activeSessions: open.filter(fresh), staleSessions: open.filter((s) => !fresh(s)),
+        }),
+      };
+    },
+
+    // Days until each upcoming exam and the study pace toward it.
+    '/api/countdown': async (params) => {
+      const state = await store.get();
+      return { meta: meta(store, state), ...countdown(state.daily, state.exams, { today: dateParam(params, 'date') ?? localDate(new Date()) }) };
+    },
+
+    '/api/caffeine': async (params) => {
+      const state = await store.get();
+      const days = filterRange(state.daily, dateParam(params, 'from'), dateParam(params, 'to'));
+      return {
+        meta: meta(store, state),
+        disclaimer: 'Associations in your own logs, not medical conclusions.',
+        ...caffeine(days, { hours: intParam(params, 'hours', 3, { min: 1, max: 12 }) }),
       };
     },
 

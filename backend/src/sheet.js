@@ -104,7 +104,8 @@ function clock(text) {
     const mins = Math.round(Number(s) * 24 * 60);
     return [Math.floor(mins / 60) % 24, mins % 60];
   }
-  const m = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp])?\.?[Mm]?\.?/);
+  // AM/PM only as its own word: "18:12 America/Phoenix" is not 6:12 AM.
+  const m = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?(?:\s*([AaPp])\.?[Mm]\.?(?![A-Za-z]))?/);
   if (!m) return null;
   let h = Number(m[1]);
   if (m[3]) h = (h % 12) + (/p/i.test(m[3]) ? 12 : 0);
@@ -259,6 +260,13 @@ function mapLifeRow(row, at, day, ctx) {
   } else if (category === 'emotion') {
     const feelings = String(row.value || label).split(/\s*(?:;|,|\band\b)\s*/).map((f) => f.trim().toLowerCase()).filter(Boolean);
     add('', { kind: 'mood', text: row.value || label, feelings, severity: num(row.severity_0_10), cause: row.cause || null, note: row.notes || null });
+  } else if (category === 'exam' || category === 'deadline' || event === 'exam') {
+    // An upcoming exam: value (or end_at) = its date, label = its name.
+    const date = normDate(row.value) ?? normDate(String(row.end_at).slice(0, 10)) ?? normDate(String(row.start_at).slice(0, 10));
+    // Subject: the unit column if given, else from the name ("MAT 213 Midterm" -> math).
+    const named = String(label).replace(/\b(midterm|final|exam|test|quiz)\b/gi, '').replace(/\b[A-Z]{2,4}\s?\d{3}\b/g, '');
+    const subject = row.unit ? subjectOf(row.unit) : /\bmath?\b|calc/i.test(label) ? 'math' : named.trim() ? subjectOf(named) : null;
+    add('', { kind: 'exam', label: label || 'Exam', subject, date, status: row.status || null });
   } else if (category === 'freeze') {
     add('', { kind: 'shield', text: label || row.notes || null });
   } else {

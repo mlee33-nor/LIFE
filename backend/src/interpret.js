@@ -172,6 +172,7 @@ export function interpret(events, { now = Date.now() } = {}) {
   const open = new Map(); // sessionKey -> start event
   const todos = new Map(); // todo_id -> { date, todo }
   const revisit = new Map(); // problem row id -> problem
+  const exams = new Map(); // exam id -> { id, label, subject, date }
   let lastBedtime = null;
 
   const addSession = (d, activity, subject, minutes, startAt, endAt, label = null, extra = {}) => {
@@ -295,6 +296,10 @@ export function interpret(events, { now = Date.now() } = {}) {
         ? data.feelings
         : String(data.text ?? data.mood ?? '').split(/\s*(?:;|,|\band\b)\s*/).map((f) => f.trim().toLowerCase()).filter(Boolean);
       d.moods.push({ at: localIso(e.at), feelings, severity: num(data.severity), cause: data.cause ?? null, notes: data.note ?? data.notes ?? null });
+    } else if (e.tracker === 'life' && data.kind === 'exam') {
+      const id = String(data.sheet_row_id ?? data.label ?? e.id);
+      if (/cancel|done|past/i.test(data.status ?? '')) exams.delete(id);
+      else exams.set(id, { id, label: data.label ?? 'Exam', subject: data.subject ?? null, date: isDay(data.date) ? data.date : null });
     } else if (e.tracker === 'life' && data.kind === 'shield') {
       d.shield = true;
     } else if (e.tracker === 'life' && ['life_note', 'symptom', 'note'].includes(data.kind) && data.text) {
@@ -406,5 +411,6 @@ export function interpret(events, { now = Date.now() } = {}) {
     // Started but never ended: Hermes should close these.
     staleSessions: starts.filter((e) => now - e.at > MAX_SESSION_MS).map(session),
     revisit: [...revisit.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    exams: [...exams.values()].filter((x) => x.date).sort((a, b) => a.date.localeCompare(b.date)),
   };
 }
