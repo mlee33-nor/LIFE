@@ -198,3 +198,18 @@ test('a direct entry never hides different sheet entries of the same kind', () =
   const { daily } = interpret(kept.map((e, i) => ({ id: String(i), ...e })));
   assert.deepEqual([daily[0].foods.sort(), daily[0].xp, daily[0].water], [['egg', 'pizza'], 55, 4]);
 });
+
+test('a night with a wake-up in the middle counts both stretches of sleep', () => {
+  const r = run(csv(
+    's1,2026-10-03,01:00,,Life,sleep,sleep,Sleep,,,,reported_closed,2026-10-03T01:00:00-07:00,2026-10-03T04:00:00-07:00,180,180,0,,,,,,,2026-10-03,',
+    'w1,2026-10-03,04:00,,Life,sleep,wake,Wake,,,,user_reported,,,,,0,,,,,,,2026-10-03,',
+    's2,2026-10-03,04:45,,Life,sleep,sleep,Sleep,,,,reported_closed,2026-10-03T04:45:00-07:00,2026-10-03T08:00:00-07:00,195,195,0,,,,,,,2026-10-03,',
+    'w2,2026-10-03,08:00,,Life,sleep,wake,Wake,,,,user_reported,,,,,0,,,,,,,2026-10-03,',
+    'n1,2026-10-03,15:00,,Life,sleep,sleep,Nap,,,,reported,2026-10-03T15:00:00-07:00,,,,0,,,,,,,2026-10-03,',
+    'n2,2026-10-03,16:00,,Life,sleep,wake,Up,,,,reported,,,,,0,,,,,,,2026-10-03,',
+  ));
+  const d = r.daily[0];
+  assert.deepEqual([d.bedtime, d.wake_time, d.sleep_hours], ['01:00', '08:00', 6.25]);
+  assert.deepEqual(d.sleep_segments.map((x) => [x.start.slice(11, 16), x.end.slice(11, 16), x.minutes, Boolean(x.nap)]),
+    [['01:00', '04:00', 180, false], ['04:45', '08:00', 195, false], ['15:00', '16:00', 60, true]]);
+});

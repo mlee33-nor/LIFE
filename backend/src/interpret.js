@@ -137,6 +137,7 @@ function emptyDay(date) {
     wake_time: null,
     wake_hour: null,
     sleep_hours: null,
+    sleep_segments: [],
     meals: [],
     foods: [],
     meals_logged: 0,
@@ -239,18 +240,18 @@ export function interpret(events, { now = Date.now() } = {}) {
       if (data.habit === 'meal' && data.source !== 'sheet') d.meals_logged++;
       if (data.habit === 'bedtime') lastBedtime = e.at;
     } else if (e.tracker === 'life' && data.kind === 'wake') {
-      // First wake-up of the day sets wake time; sleep runs from the last bedtime.
-      if (d.wake_time === null) {
-        d.wake_time = hhmm(e.at);
-        d.wake_hour = round2(Number(d.wake_time.slice(0, 2)) + Number(d.wake_time.slice(3)) / 60);
-        const bed = lastBedtime ?? (data.bedtime ? new Date(data.bedtime) : null);
-        const hours = bed ? (e.at - bed) / 3600000 : null;
-        if (hours !== null && hours > 0 && hours <= MAX_SLEEP_HOURS) {
-          d.sleep_hours = round2(hours);
-          d.bedtime = hhmm(bed);
-        } else if (num(data.sleep_minutes) > 0) {
-          d.sleep_hours = round2(num(data.sleep_minutes) / 60);
-        }
+      // Every bedtime -> wake pair is one stretch of sleep, so a night with a
+      // wake-up in the middle (1-4 AM, then 4:45-8 AM) counts both stretches.
+      // Stretches ending after 2 PM are naps and don't count as the night.
+      const bed = lastBedtime ?? (data.bedtime ? new Date(data.bedtime) : null);
+      const hours = bed ? (e.at - bed) / 3600000 : null;
+      const nap = Number(hhmm(e.at).slice(0, 2)) >= 14;
+      if (hours !== null && hours > 0 && hours <= MAX_SLEEP_HOURS) {
+        d.sleep_segments.push({ start: localIso(bed), end: localIso(e.at), minutes: Math.round(hours * 60), ...(nap && { nap: true }) });
+      } else if (num(data.sleep_minutes) > 0) {
+        d.sleep_segments.push({ start: null, end: localIso(e.at), minutes: num(data.sleep_minutes), ...(nap && { nap: true }) });
+      } else if (!nap && d.wake_time === null) {
+        d.wake_time = hhmm(e.at); // a wake-up with no known bedtime
       }
       lastBedtime = null;
     } else if (e.tracker === 'life' && data.kind === 'todo' && (data.text || data.todo_id)) {
@@ -391,6 +392,14 @@ export function interpret(events, { now = Date.now() } = {}) {
       return { ...g, done_minutes: done, complete: g.target_minutes != null && done != null && done >= g.target_minutes };
     });
     d.habits_done = Object.keys(d.habits).length;
+    // The night: total of its stretches, first bedtime, final wake-up.
+    const night = d.sleep_segments.filter((x) => !x.nap);
+    if (night.length) {
+      d.sleep_hours = round2(night.reduce((sum, x) => sum + x.minutes, 0) / 60);
+      if (night[0].start) d.bedtime = night[0].start.slice(11, 16);
+      d.wake_time = night.at(-1).end.slice(11, 16);
+    }
+    if (d.wake_time) d.wake_hour = round2(Number(d.wake_time.slice(0, 2)) + Number(d.wake_time.slice(3)) / 60);
     if (d.sleep_hours === null && d.reported_sleep_hours != null) d.sleep_hours = d.reported_sleep_hours;
     delete d.reported_sleep_hours;
     // No total logged (or it was unreadable): add up the face-map zones.
