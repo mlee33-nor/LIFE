@@ -51,7 +51,6 @@ import {
   SYMPTOM_WINDOWS,
 } from './analytics.js';
 import { weeklyReview } from './review.js';
-import { createPhotoPin } from './photo-pin.js';
 import { badHabit, caffeine, countdown, nudges } from './coach.js';
 import { doordashSummary, level, moodSummary, painTimeline, recap, streaks, weeklyReport } from './extras.js';
 
@@ -95,8 +94,7 @@ function meta(store, state) {
   };
 }
 
-export function createServer(store, { pool, writeApiKey, readApiKey, photoPin = process.env.PHOTO_PIN } = {}) {
-  const pin = createPhotoPin(photoPin);
+export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
   const clients = new Set();
 
   function broadcast(event, data) {
@@ -166,7 +164,7 @@ export function createServer(store, { pool, writeApiKey, readApiKey, photoPin = 
   const routes = {
     '/api/health': async () => {
       try {
-        return { ok: true, ...meta(store, await store.get()), photo_pin: pin.enabled, sheet_sync: await sheetSyncStatus() };
+        return { ok: true, ...meta(store, await store.get()), sheet_sync: await sheetSyncStatus() };
       } catch (err) {
         return { ok: false, error: err.message };
       }
@@ -301,8 +299,7 @@ export function createServer(store, { pool, writeApiKey, readApiKey, photoPin = 
       return { meta: meta(store, state), ...weeklyReview(state.daily, { end: dateParam(params, 'end') }) };
     },
 
-    '/api/skin/photos': async (params, req) => {
-      pin.check(req, new URL(req.url, 'http://local'));
+    '/api/skin/photos': async () => {
       const state = await store.get();
       const days = state.daily
         .map((d) => ({
@@ -432,7 +429,7 @@ export function createServer(store, { pool, writeApiKey, readApiKey, photoPin = 
   const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Photo-Pin');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204).end();
@@ -562,7 +559,6 @@ export function createServer(store, { pool, writeApiKey, readApiKey, photoPin = 
 
       const photoMatch = url.pathname.match(/^\/api\/photos\/([a-f0-9]{64})$/);
       if (photoMatch) {
-        pin.check(req, url);
         const photo = await getPhoto(pool, photoMatch[1]);
         if (!photo) throw new HttpError(404, 'Photo not found');
         res.writeHead(200, {
