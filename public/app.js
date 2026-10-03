@@ -814,25 +814,8 @@ function closeMoreMenu() {
 }
 function go(name) { showPanel(name); history.replaceState(null, '', `#${name}`); }
 
-// ---------- Theme (dark by default; index.html sets it before first paint) ----------
-const THEME_COLORS = { dark:'#15121f', light:'#f7f2ff' };
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  $('meta[name="theme-color"]')?.setAttribute('content', THEME_COLORS[theme]);
-  const toggle = $('#theme-toggle');
-  if (toggle) { toggle.setAttribute('aria-pressed', String(theme === 'dark')); toggle.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'; }
-}
-function wireTheme() {
-  applyTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
-  $('#theme-toggle')?.addEventListener('click', () => {
-    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    applyTheme(next);
-    try { localStorage.setItem('soma-theme', next); } catch { /* storage blocked: still switches for this visit */ }
-  });
-}
 
 function wireInteractions() {
-  wireTheme();
   $$('.tab-item[href]').forEach(item => item.addEventListener('click', event => { event.preventDefault(); go(item.dataset.tab === 'body' ? state.bodyTab : item.dataset.tab); }));
   $('.tab-item[data-tab="more"]')?.addEventListener('click', event => {
     const menu = $('#more-menu'); const open = menu.hidden;

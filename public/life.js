@@ -115,9 +115,9 @@ function replay(days,date,selected) {
   yesterdayIntervals.forEach(s=>{let lane=yesterdayLanes.findIndex(end=>end<=s.from);if(lane<0)lane=yesterdayLanes.length;s.lane=lane;yesterdayLanes[lane]=s.to;});
 
   const totalLanes = Math.max(1, lanes.length, yesterdayLanes.length);
-  // Bed/wake moments a sleep stretch already shows are not repeated.
+  // A bedtime a sleep stretch already starts at isn't repeated; the wake-up ☀ always shows.
   const covered = m => sleeps.some(b => Math.abs((m.kind==='bed'?b.from:b.to) - m.min) <= 1);
-  const moments = dayMoments(days, date).filter(m => m.kind==='mb' || !covered(m));
+  const moments = dayMoments(days, date).filter(m => m.kind!=='bed' || !covered(m));
   const awake = sleeps.slice(1).map((b,i)=>({from:sleeps[i].to,to:b.from})).filter(g=>g.to-g.from>0&&g.to-g.from<=240);
   const momentKeys = [...new Set(moments.map(m=>m.kind))];
 
