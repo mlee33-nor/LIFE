@@ -69,7 +69,7 @@ const sessionText = s => { const name = sessionName(s), subject = s.subject ? ca
 function normalizeDay(day) {
   return {
     date:day.date, event_count:num(day.event_count), stomach_pain:maybeNum(day.stomach_pain), acne:maybeNum(day.acne), acne_spots:maybeNum(day.acne_spots),
-    wake_time:day.wake_time ?? null, bedtime:day.bedtime ?? null, sleep_hours:maybeNum(day.sleep_hours),
+    wake_time:day.wake_time ?? null, bedtime:day.bedtime ?? null, mb:num(day.mb), mb_events:Array.isArray(day.mb_events) ? day.mb_events : [], sleep_hours:maybeNum(day.sleep_hours),
     xp:maybeNum(day.xp), headache:maybeNum(day.headache), headache_reports:day.headache_reports||[], missed_habits:day.missed_habits||[], pain_reports:day.pain_reports||[], social_minutes:num(day.social_minutes), rest_minutes:num(day.rest_minutes),
     water:maybeNum(day.water), meals_logged:num(day.meals_logged), habits_done:num(day.habits_done),
     work_minutes:num(day.work_minutes), hmwk_minutes:num(day.hmwk_minutes), workout_minutes:num(day.workout_minutes), walk_minutes:num(day.walk_minutes), chores_minutes:num(day.chores_minutes), hmwk_by_subject:day.hmwk_by_subject||{},
@@ -693,7 +693,8 @@ function renderJournal(query='') {
       day.wake_time ? `<span class="signal-badge">Wake ${escapeHtml(formatClock(day.wake_time) || day.wake_time)}</span>` : '',
       day.sleep_hours !== null ? `<span class="signal-badge">Sleep ${day.sleep_hours}h</span>` : '',
       day.headache !== null || day.headache_reports.length ? `<span class="signal-badge">Headache ${day.headache ?? 'reported'}</span>` : '',
-      day.missed_habits.length ? `<span class="signal-badge">Missed: ${escapeHtml(day.missed_habits.map(labelMetric).join(', '))}</span>` : '',
+      day.mb ? `<span class="signal-badge warn">MB${day.mb > 1 ? ` ×${day.mb}` : ''}${day.mb_events[0]?.at ? ` ${escapeHtml(formatClock(day.mb_events[0].at) || '')}` : ''}</span>` : '',
+      day.missed_habits.length ? `<span class="signal-badge">Missed:${escapeHtml(day.missed_habits.map(labelMetric).join(', '))}</span>` : '',
       day.meals_logged ? `<span class="signal-badge">${plural(day.meals_logged, 'meal')}</span>` : '',
       day.habits_done ? `<span class="signal-badge">${plural(day.habits_done, 'habit')}</span>` : '',
       totalActivity(day) ? `<span class="signal-badge">Active ${totalActivity(day)}m</span>` : '',

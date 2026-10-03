@@ -289,3 +289,5 @@ body[data-dashboard="acne"] .metric-compare-note, body[data-dashboard="stomach"]
 .caffeine-days { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 12px; }
 .caffeine-days > li { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; padding-top: 12px; border-top: 1px dashed #d7c6e7; }
 @media (max-width: 580px) { .caffeine-days > li { grid-template-columns: 1fr; } }
+
+.mb-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

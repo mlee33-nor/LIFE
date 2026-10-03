@@ -198,3 +198,30 @@ export function nudges(daily, { now = new Date(), activeSessions = [], staleSess
     text: forMyles.length ? forMyles.map((n) => `• ${n.text}`).join('\n') : null,
   };
 }
+
+// ---- Bad habit (MB) -------------------------------------------------------------
+
+// A habit being cut back: when it last happened, days free since, the longest
+// free stretch, and counts this week vs last. Null if it has never been logged.
+export function badHabit(daily, { today = localDate(new Date()), field = 'mb', label = 'MB' } = {}) {
+  const hits = daily.filter((d) => d.date <= today && d[field] > 0).map((d) => ({ date: d.date, count: d[field] }));
+  if (!hits.length) return null;
+  const first = daily[0]?.date ?? hits[0].date;
+  const last = hits.at(-1).date;
+  // Free stretches: from the first logged day to each hit, between hits, and up to today.
+  const points = [first, ...hits.map((h) => h.date), today];
+  let best = 0;
+  for (let i = 1; i < points.length; i++) best = Math.max(best, daysBetween(points[i - 1], points[i]) - (i === 1 && points[0] !== hits[0].date ? 0 : 1));
+  const sum = (from, to) => hits.filter((h) => h.date > from && h.date <= to).reduce((a, h) => a + h.count, 0);
+  return {
+    habit: field, label,
+    today: daily.find((d) => d.date === today)?.[field] ?? 0,
+    last_date: last,
+    days_free: daysBetween(last, today),
+    best_days_free: Math.max(best, daysBetween(last, today)),
+    this_week: sum(shift(today, -7), today),
+    last_week: sum(shift(today, -14), shift(today, -7)),
+    total: hits.reduce((a, h) => a + h.count, 0),
+    dates: hits.map((h) => h.date),
+  };
+}

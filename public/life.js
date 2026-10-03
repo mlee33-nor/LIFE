@@ -16,6 +16,26 @@ function clock(value) {
   const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Phoenix',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date);
   return Number(parts.find(p=>p.type==='hour').value)*60+Number(parts.find(p=>p.type==='minute').value);
 }
+// Moments on a day's timeline: wake-up, bedtime (after midnight it belongs to
+// this calendar day; an evening bedtime comes from the next day's record) and MB.
+const hhmm = value => { const m=/^(\d{1,2}):(\d{2})/.exec(value||''); return m ? Number(m[1])*60+Number(m[2]) : null; };
+const MOMENTS = { wake:{icon:'☀', name:'Woke up', key:'Wake'}, bed:{icon:'☾', name:'Went to sleep', key:'Sleep'}, mb:{icon:'•', name:'MB', key:'MB'} };
+export function dayMoments(days, date) {
+  const day = days.find(d=>d.date===date);
+  const next = days.find(d=>d.date===shiftIso(date,1));
+  const out = [];
+  const bed = hhmm(day?.bedtime);
+  if (bed !== null && bed < 720) out.push({ min:bed, kind:'bed' });
+  const wake = hhmm(day?.wake_time);
+  if (wake !== null) out.push({ min:wake, kind:'wake' });
+  const late = hhmm(next?.bedtime);
+  if (late !== null && late >= 720) out.push({ min:late, kind:'bed' });
+  for (const e of day?.mb_events || []) { const m = clock(e.at); if (m !== null) out.push({ min:m, kind:'mb' }); }
+  return out.sort((a,b)=>a.min-b.min);
+}
+const momentMarker = m => `<span class="replay-moment ${m.kind}" style="left:${m.min/14.4}%" title="${MOMENTS[m.kind].name} at ${time(m.min)}"><b aria-hidden="true">${MOMENTS[m.kind].icon}</b></span>`;
+const momentEvent = m => `<article class="replay-event moment ${m.kind}"><div class="replay-clock"><strong>${time(m.min)}</strong></div><div class="replay-spine"><i></i></div><div class="replay-event-body moment-body"><span aria-hidden="true">${MOMENTS[m.kind].icon}</span><strong>${MOMENTS[m.kind].name}</strong></div></article>`;
+
 export function sessionsForDay(day) {
   return (day?.sessions||[]).map((s,index)=>{
     const minutes=Number(s.minutes);
@@ -69,10 +89,12 @@ function replay(days,date,selected) {
   yesterdayIntervals.forEach(s=>{let lane=yesterdayLanes.findIndex(end=>end<=s.from);if(lane<0)lane=yesterdayLanes.length;s.lane=lane;yesterdayLanes[lane]=s.to;});
 
   const totalLanes = Math.max(1, lanes.length, yesterdayLanes.length);
+  const moments = dayMoments(days, date);
+  const momentKeys = [...new Set(moments.map(m=>m.kind))];
 
-  return `<div class="replay-heading"><h3>Timeline</h3><span class="replay-count">${plural(intervals.length,'session')}</span></div><div class="replay-legend">${legend.map(key=>`<span><i style="background:${getColor(key)}"></i>${esc(names[key]||key)}</span>`).join('')}<span><i class="unlogged-key"></i>Unlogged</span></div><div class="replay-chart"><div class="time-axis"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span></div><div class="replay-strip" style="height:${totalLanes*38+16}px">
+  return `<div class="replay-heading"><h3>Timeline</h3><span class="replay-count">${plural(intervals.length,'session')}</span></div><div class="replay-legend">${legend.map(key=>`<span><i style="background:${getColor(key)}"></i>${esc(names[key]||key)}</span>`).join('')}<span><i class="unlogged-key"></i>Unlogged</span>${momentKeys.map(k=>`<span class="moment-key ${k}"><b aria-hidden="true">${MOMENTS[k].icon}</b>${MOMENTS[k].key}</span>`).join('')}</div><div class="replay-chart"><div class="time-axis"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span></div><div class="replay-strip" style="height:${totalLanes*38+16}px">
   ${yesterdayIntervals.map(s=>`<span class="replay-segment ghost" style="left:${s.from/14.4}%;width:${(s.to-s.from)/14.4}%;top:${s.lane*38+8}px;" title="Yesterday: ${esc(s.label||names[s.activity]||s.activity)} (${time(s.from)}–${time(s.to)})"></span>`).join('')}
-  ${intervals.map(s=>`<span class="replay-segment" style="left:${s.from/14.4}%;width:${(s.to-s.from)/14.4}%;top:${s.lane*38+8}px;background:${getColor(getTaskKey(s))}" title="${esc(s.label||names[s.activity]||s.activity)}: ${time(s.from)}–${time(s.to)}${s.estimated?' (calculated start)':''}"></span>`).join('')}</div></div><div class="replay-agenda">${intervals.map(s=>`<article class="replay-event" style="--event-color:${getColor(getTaskKey(s))}"><div class="replay-clock"><strong>${time(s.from)}</strong><small>${s.to===1440?'12:00 AM':time(s.to)}</small></div><div class="replay-spine"><i></i></div><div class="replay-event-body"><div class="replay-event-title"><strong>${esc(s.label||names[s.activity]||s.activity)}</strong><span>${duration(s.to-s.from)}</span></div><p>${esc(names[s.activity]||s.activity)}${s.subject&&!sameText(s.subject,names[s.activity])?' / '+esc(s.subject):''}${s.originDate!==date?' · continued from the day before':''}</p>${s.estimated?'<small class="calculated-label">Start calculated from duration</small>':''}</div></article>`).join('')||'<p class="time-empty">Nothing timed here yet. Try a different day or reset your filters.</p>'}</div><p class="time-caption">Uncoloured time is unlogged. Faint dashed blocks are yesterday, for comparison.</p>`;
+  ${intervals.map(s=>`<span class="replay-segment" style="left:${s.from/14.4}%;width:${(s.to-s.from)/14.4}%;top:${s.lane*38+8}px;background:${getColor(getTaskKey(s))}" title="${esc(s.label||names[s.activity]||s.activity)}: ${time(s.from)}–${time(s.to)}${s.estimated?' (calculated start)':''}"></span>`).join('')}${moments.map(momentMarker).join('')}</div></div><div class="replay-agenda">${[...intervals.map(s=>({at:s.from,s})),...moments.map(m=>({at:m.min,m}))].sort((a,b)=>a.at-b.at).map(({s,m})=>m?momentEvent(m):`<article class="replay-event" style="--event-color:${getColor(getTaskKey(s))}"><div class="replay-clock"><strong>${time(s.from)}</strong><small>${s.to===1440?'12:00 AM':time(s.to)}</small></div><div class="replay-spine"><i></i></div><div class="replay-event-body"><div class="replay-event-title"><strong>${esc(s.label||names[s.activity]||s.activity)}</strong><span>${duration(s.to-s.from)}</span></div><p>${esc(names[s.activity]||s.activity)}${s.subject&&!sameText(s.subject,names[s.activity])?' / '+esc(s.subject):''}${s.originDate!==date?' · continued from the day before':''}</p>${s.estimated?'<small class="calculated-label">Start calculated from duration</small>':''}</div></article>`).join('')||'<p class="time-empty">Nothing timed here yet. Try a different day or reset your filters.</p>'}</div><p class="time-caption">Uncoloured time is unlogged. Faint dashed blocks are yesterday, for comparison.</p>`;
 }
 let searchDebounceTimer = null;
 let lastAnnounced = null;

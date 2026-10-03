@@ -22,3 +22,13 @@
 @media(max-width:1200px){.time-columns{grid-template-columns:minmax(0,1fr)}.time-columns>.time-panel:last-child{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}.time-columns>.time-panel:last-child h3{grid-column:1/-1}}
 @media(max-width:580px){.time-columns>.time-panel:first-child{padding:15px}.replay-heading h3{font-size:23px!important}.replay-event{grid-template-columns:57px 15px minmax(0,1fr);gap:5px}.replay-clock strong{font-size:10px}.replay-event-body{padding:12px 10px}.replay-event-title{align-items:start;flex-direction:column;gap:5px}.replay-chart{padding:10px}.time-columns>.time-panel:last-child{display:block}}
 .replay-segment.ghost{background:#e3dbea;opacity:0.4;z-index:0;box-shadow:none;border:1px dashed #d0c8da;}
+
+/* Wake / sleep / MB moments on the day timeline */
+.replay-moment{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #b4690e;z-index:2;pointer-events:auto}
+.replay-moment b{position:absolute;top:2px;left:-9px;width:18px;height:18px;border-radius:50%;background:#fff3d6;border:1.5px solid #b4690e;font-size:11px;line-height:15px;text-align:center;color:#7a4300}
+.replay-moment.bed{border-left-color:#4b3fa8}.replay-moment.bed b{background:#e6e2ff;border-color:#4b3fa8;color:#2e2470}
+.replay-moment.mb{border-left:2px dotted #b3261e}.replay-moment.mb b{top:auto;bottom:2px;background:#ffd7d2;border-color:#b3261e;color:#7d1a12;font-size:14px;line-height:13px}
+.moment-key b{display:inline-block;margin-right:2px;font-size:11px}
+.replay-event.moment .moment-body{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fff8e8;border:1px dashed #e0b26a;border-radius:10px;font-size:13px}
+.replay-event.moment.bed .moment-body{background:#f1efff;border-color:#a99ee8}
+.replay-event.moment.mb .moment-body{background:#fff0ee;border-color:#e3a39c}

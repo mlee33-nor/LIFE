@@ -76,3 +76,12 @@ test('nudges: nothing to say on a good morning', () => {
   assert.deepEqual(n.nudges, []);
   assert.equal(n.text, null);
 });
+
+test('MB: days free, longest free stretch, weekly counts; null if never logged', async () => {
+  const { badHabit } = await import('../src/coach.js');
+  const d = (date, mb) => ({ date, mb });
+  const daily = [d('2026-09-20', 0), d('2026-09-22', 1), d('2026-09-25', 2), d('2026-09-28', 0), d('2026-10-01', 0)];
+  const b = badHabit(daily, { today: '2026-10-01' });
+  assert.deepEqual([b.today, b.last_date, b.days_free, b.best_days_free, b.this_week, b.total], [0, '2026-09-25', 6, 6, 2, 3]);
+  assert.equal(badHabit([d('2026-10-01', 0)], { today: '2026-10-01' }), null);
+});

@@ -51,7 +51,7 @@ import {
   SYMPTOM_WINDOWS,
 } from './analytics.js';
 import { weeklyReview } from './review.js';
-import { caffeine, countdown, nudges } from './coach.js';
+import { badHabit, caffeine, countdown, nudges } from './coach.js';
 import { doordashSummary, level, moodSummary, painTimeline, recap, streaks, weeklyReport } from './extras.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -318,7 +318,8 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
     // Goal progress and habit streaks (recovery-shield days don't break them).
     '/api/streaks': async (params) => {
       const state = await store.get();
-      return { meta: meta(store, state), ...streaks(state.daily, { today: dateParam(params, 'date') ?? localDate(new Date()) }) };
+      const today = dateParam(params, 'date') ?? localDate(new Date());
+      return { meta: meta(store, state), ...streaks(state.daily, { today }), bad_habits: [badHabit(state.daily, { today })].filter(Boolean) };
     },
 
     // Short plain-text recap of one day, for Hermes to text at night.

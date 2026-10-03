@@ -485,6 +485,14 @@ export function recap(daily, { date } = {}) {
   // Skin.
   if (isNum(d.acne_spots)) lines.push(`Acne: ${plural(d.acne_spots, 'spot')}.`);
 
+  // MB (a habit he's cutting): logged today, or how long since the last one.
+  const mbDays = days.filter((x) => x.date <= date && x.mb > 0).map((x) => x.date);
+  if (d.mb > 0) lines.push(`MB: logged${d.mb > 1 ? ` ${d.mb}x` : ''} today.`);
+  else if (mbDays.length) {
+    const since = Math.round((Date.parse(`${date}T12:00:00Z`) - Date.parse(`${mbDays.at(-1)}T12:00:00Z`)) / 86400000);
+    lines.push(`MB-free: ${plural(since, 'day')}.`);
+  }
+
   // XP and level (total through this date).
   const hasXp = arr(d.xp_events).length > 0 || (isNum(d.xp) && d.xp !== 0);
   if (hasXp) {
@@ -656,6 +664,10 @@ export function weeklyReport(daily, { end } = {}) {
   const sh = streakHighlights.habits.map((h) => `${h.habit.replace(/_/g, ' ')} ${h.current}d`);
   if (streakHighlights.study_goal?.current >= 2) sh.unshift(`${streakHighlights.study_goal.subject} goal ${streakHighlights.study_goal.current}d`);
   if (sh.length) lines.push(`Streaks: ${sh.join(', ')}.`);
+  const mbCount = (list) => list.reduce((a, d) => a + (isNum(d.mb) ? d.mb : 0), 0);
+  if (mbCount(thisWeek) || mbCount(lastWeek)) {
+    lines.push(`MB: ${mbCount(thisWeek)} this week${comparable ? ` (${mbCount(lastWeek)} last week)` : ''}.`);
+  }
   if (!comparable) lines.push('Not enough data to compare with last week.');
 
   const { text } = fitLines(head, lines, WEEKLY_MAX);

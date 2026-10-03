@@ -120,6 +120,7 @@ function renderGoals() {
   }
 
   parts.push(countdownBlock());
+  parts.push(badHabitBlock());
 
   const allHabits = (Array.isArray(s?.habits) ? s.habits : []).filter((h) => h?.habit);
   const live = allHabits.filter((h) => Number(h.current) > 0).slice(0, 5);
@@ -338,4 +339,17 @@ function renderCaffeine() {
     <p class="extra-thin">${sleepLine}</p>
     <ol class="caffeine-days">${days.slice(0, 7).map(dayItem).join('')}</ol>
     <p class="extra-thin">Associations in your own logs, not medical conclusions.</p>`;
+}
+
+// ---------- MB (habit being cut; inside Goals & streaks) ----------
+function badHabitBlock() {
+  const list = Array.isArray(store.streaks?.bad_habits) ? store.streaks.bad_habits : [];
+  return list.filter((b) => b && isNum(b.days_free)).map((b) => {
+    const name = esc(b.label || b.habit);
+    const status = b.today > 0
+      ? `<b class="chip warn">logged today${b.today > 1 ? ` ×${b.today}` : ''}</b>`
+      : `<b class="chip good">${plural(b.days_free, 'day')} free</b>`;
+    const week = `${b.this_week} this week${isNum(b.last_week) ? ` · ${b.last_week} last week` : ''}`;
+    return `<section class="goal-block"><h3>${name}</h3><div class="mb-row">${status}<span class="extra-thin">best ${plural(b.best_days_free, 'day')} free · ${week} · last ${esc(isoLabel(b.last_date, { month: 'short', day: 'numeric' }))}</span></div></section>`;
+  }).join('');
 }

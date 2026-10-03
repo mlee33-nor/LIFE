@@ -306,6 +306,7 @@ export function interpret(events, { now = Date.now() } = {}) {
       d.life_notes.push({ at: localIso(e.at), kind: data.note_kind ?? data.kind, text: data.text });
     } else if (e.tracker === 'life' && data.kind === 'mb') {
       d.mb = (d.mb ?? 0) + 1;
+      d.mb_events = [...(d.mb_events ?? []), { at: localIso(e.at), text: data.text ?? null }];
     } else if (e.tracker === 'life' && (data.kind === 'dash' || data.kind === 'dash_expense')) {
       // Sums stay null until a value is reported (pay can be "pending").
       const dd = (d.doordash ??= { shifts: [], pay: null, net_profit: null, miles: null, minutes: null, gas_cost: null, expenses: null });
