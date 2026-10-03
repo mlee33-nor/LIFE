@@ -356,6 +356,16 @@ function mapDashRow(row, at, day) {
   return [{ key, tracker: 'life', at: startStamp ?? at, day, data }];
 }
 
+// Money rows: income from side jobs. label = source (RSA, eBay, Upwork),
+// value = amount; event=monthly makes it that month's total (month = date's
+// month, or YYYY-MM in unit), otherwise it's one payment/sale on that day.
+function mapMoneyRow(row, at, day) {
+  const amount = num(row.value);
+  const monthly = /month/i.test(row.event) || /month/i.test(row.category);
+  const period = monthly ? (String(row.unit).match(/^\d{4}-\d{2}$/) ? row.unit : day.slice(0, 7)) : null;
+  return [{ key: row.row_id, tracker: 'life', at, day, data: { kind: 'income', job: row.label || row.category || null, amount, period, basis: row.outcome || null, note: row.notes || null } }];
+}
+
 // Math revisitor rows: problems to come back to.
 function mapRevisitRow(row, at, day) {
   return [{
@@ -452,6 +462,7 @@ export function mapSheetRows(rawRows, issues = []) {
       else if (tracker === 'life') events.push(...mapLifeRow(row, atFor(row), day, ctx));
       else if (tracker === 'skin') events.push(...mapSkinRow(row, atFor(row), day, issues));
       else if (tracker.startsWith('doordash')) events.push(...mapDashRow(row, atFor(row), day));
+      else if (tracker === 'money' || tracker === 'income') events.push(...mapMoneyRow(row, atFor(row), day));
       else if (tracker.startsWith('math')) events.push(...mapRevisitRow(row, atFor(row), day));
       else issues.push({ row_id: row.row_id, reason: `unknown tracker "${row.tracker}"` });
     } catch (err) {

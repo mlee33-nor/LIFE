@@ -35,6 +35,7 @@
     <link rel="stylesheet" href="/extras.css" />
     <link rel="stylesheet" href="/cards.css" />
     <link rel="stylesheet" href="/theme.css" />
+    <link rel="stylesheet" href="/money.css" />
     <link rel="stylesheet" href="/mobile.css" />
   </head>
   <body>
@@ -66,7 +67,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V9m5 9V5m6 13v-6m5 6V3"/></svg>
             Patterns
           </a>
-          <a class="nav-item" href="#doordash" data-view="doordash"><span aria-hidden="true">$</span>DoorDash</a>
+          <a class="nav-item" href="#doordash" data-view="doordash"><span aria-hidden="true">$</span>Money</a>
         </nav>
       </aside>
 
@@ -314,7 +315,8 @@
         </section>
 
         <section class="secondary-panel doordash-panel" id="doordash" data-panel="doordash" hidden>
-          <div class="section-heading"><div><h2>DoorDash earnings</h2><p>Pay, costs, and what each hour and mile earned.</p></div></div>
+          <article class="card extra-card money-card" id="money-card" aria-live="polite" aria-label="Income"></article>
+          <div class="section-heading"><div><h2>DoorDash</h2><p>Pay, costs, and what each hour and mile earned.</p></div></div>
           <div id="doordash-dashboard" aria-live="polite"></div>
         </section>
 

@@ -8,6 +8,7 @@ import { startSyncStatus, refreshSyncStatus, reportDataLoad, reportLoading } fro
 import { loadReview } from './review.js';
 import { loadExtras, renderDayCards, renderRevisit, renderLevel } from './extras.js';
 import { loadDoorDash } from './doordash.js';
+import { loadMoney } from './money.js';
 import { renderWeekStrip } from './week.js';
 import { renderSkincare } from './skincare.js';
 import { phoenixToday, phoenixLabel, greeting, shiftIso, isoLabel, plural, isNum, sameText, canonicalSubject, isProductive, clockMinutes, clockLabel, daysBetween } from './util.js';
@@ -131,6 +132,7 @@ async function loadData({announce = false} = {}) {
   loadReview();
   loadExtras({ days: state.days });
   loadDoorDash();
+  loadMoney();
   // MOTION syncs on its own; this only re-reads what the server already has.
   if (announce) showToast(state.source === 'api' ? 'Refreshed just now · MOTION syncs automatically' : 'Local sample data reloaded');
 }
@@ -766,8 +768,8 @@ function watchForUpdates() {
 }
 
 const PANELS = ['overview','homework','acne','stomach','journal','patterns','doordash'];
-const TITLES = { homework:'Your study lab', acne:'Your skin story', stomach:'Your gut journal', journal:'Your journal', patterns:'Your patterns', doordash:'Your DoorDash shifts' };
-const DOC_TITLES = { overview:'Life', homework:'Study lab', acne:'Acne', stomach:'Stomach', journal:'Journal', patterns:'Patterns', doordash:'DoorDash' };
+const TITLES = { homework:'Your study lab', acne:'Your skin story', stomach:'Your gut journal', journal:'Your journal', patterns:'Your patterns', doordash:'Your money' };
+const DOC_TITLES = { overview:'Life', homework:'Study lab', acne:'Acne', stomach:'Stomach', journal:'Journal', patterns:'Patterns', doordash:'Money' };
 // Patterns needs about two weeks of history; until then it stays out of the nav.
 function updatePatternsNav() {
   const ready = state.days.length >= MIN_PATTERN_DAYS;

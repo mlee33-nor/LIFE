@@ -10,15 +10,15 @@
 // next open while online and the HTML never runs against stale scripts.
 // Bump VERSION to force old caches to be dropped.
 
-const VERSION = 'v8';
+const VERSION = 'v9';
 const SHELL_CACHE = `soma-shell-${VERSION}`;
 const FONT_CACHE = `soma-fonts-${VERSION}`;
 const NETWORK_TIMEOUT_MS = 3500;
 
 const SHELL = [
   '/',
-  '/styles.css', '/play.css', '/replay.css', '/homework.css', '/photos.css', '/todos.css', '/auth.css', '/review.css', '/extras.css', '/cards.css', '/theme.css', '/mobile.css',
-  '/app.js', '/life.js', '/homework.js', '/photos.js', '/todos.js', '/auth.js', '/status.js', '/review.js', '/util.js', '/extras.js', '/doordash.js', '/week.js', '/skincare.js',
+  '/styles.css', '/play.css', '/replay.css', '/homework.css', '/photos.css', '/todos.css', '/auth.css', '/review.css', '/extras.css', '/cards.css', '/theme.css', '/money.css', '/mobile.css',
+  '/app.js', '/life.js', '/homework.js', '/photos.js', '/todos.js', '/auth.js', '/status.js', '/review.js', '/util.js', '/extras.js', '/doordash.js', '/money.js', '/week.js', '/skincare.js',
   '/manifest.webmanifest',
   '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png',
   '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png', '/icons/favicon-32.png',

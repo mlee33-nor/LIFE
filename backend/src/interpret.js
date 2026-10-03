@@ -174,6 +174,7 @@ export function interpret(events, { now = Date.now() } = {}) {
   const todos = new Map(); // todo_id -> { date, todo }
   const revisit = new Map(); // problem row id -> problem
   const exams = new Map(); // exam id -> { id, label, subject, date }
+  const incomes = [];
   let lastBedtime = null;
 
   const addSession = (d, activity, subject, minutes, startAt, endAt, label = null, extra = {}) => {
@@ -297,6 +298,10 @@ export function interpret(events, { now = Date.now() } = {}) {
         ? data.feelings
         : String(data.text ?? data.mood ?? '').split(/\s*(?:;|,|\band\b)\s*/).map((f) => f.trim().toLowerCase()).filter(Boolean);
       d.moods.push({ at: localIso(e.at), feelings, severity: num(data.severity), cause: data.cause ?? null, notes: data.note ?? data.notes ?? null });
+    } else if (data.kind === 'income' && num(data.amount) !== null) {
+      // Side-job income; totalled per month in money.js.
+      const period = /^\d{4}-\d{2}$/.test(data.period ?? '') ? data.period : null;
+      incomes.push({ id: String(data.sheet_row_id ?? e.id), source: data.job ?? (['sheet', 'form', 'dashboard'].includes(data.source) ? null : data.source ?? null), amount: num(data.amount), date: d.date, period, basis: data.basis ?? null, note: data.note ?? null });
     } else if (e.tracker === 'life' && data.kind === 'exam') {
       const id = String(data.sheet_row_id ?? data.label ?? e.id);
       if (/cancel|done|past/i.test(data.status ?? '')) exams.delete(id);
@@ -421,6 +426,7 @@ export function interpret(events, { now = Date.now() } = {}) {
     // Started but never ended: Hermes should close these.
     staleSessions: starts.filter((e) => now - e.at > MAX_SESSION_MS).map(session),
     revisit: [...revisit.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    incomes,
     exams: [...exams.values()].filter((x) => x.date).sort((a, b) => a.date.localeCompare(b.date)),
   };
 }

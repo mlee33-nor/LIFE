@@ -51,6 +51,7 @@ import {
   SYMPTOM_WINDOWS,
 } from './analytics.js';
 import { weeklyReview } from './review.js';
+import { moneySummary } from './money.js';
 import { badHabit, caffeine, countdown, nudges } from './coach.js';
 import { doordashSummary, level, moodSummary, painTimeline, recap, streaks, weeklyReport } from './extras.js';
 
@@ -375,6 +376,12 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         disclaimer: 'Associations in your own logs, not medical conclusions.',
         ...caffeine(days, { hours: intParam(params, 'hours', 3, { min: 1, max: 12 }) }),
       };
+    },
+
+    // Income by month across RSA, eBay, Upwork and DoorDash.
+    '/api/money': async (params) => {
+      const state = await store.get();
+      return { meta: meta(store, state), ...moneySummary(state.daily, state.incomes, { today: dateParam(params, 'date') ?? localDate(new Date()) }) };
     },
 
     '/api/doordash': async () => {
