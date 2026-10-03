@@ -4,7 +4,7 @@
 // answer shows a friendly empty state, never made-up numbers.
 
 import { esc, plural, isNum, getOptional, phoenixToday, shiftIso, isoLabel, clockMinutes, clockLabel, durationLabel, canonicalSubject, API_BASE, API_KEY } from './util.js';
-import { getLifeDate } from './life.js';
+import { getSelectedDay, setRestDays } from './week.js';
 
 const store = { streaks: undefined, pain: undefined, issues: undefined, revisit: undefined, recap: new Map(), days: [], filtered: [], rangeDays: null, recapDate: null, painShowAll: false, revisitShowAll: false, level: null };
 const $ = (id) => document.getElementById(id);
@@ -37,14 +37,16 @@ export async function loadExtras({ days = [] } = {}) {
   store.issues = issues.ok ? issues.data : null;
   store.revisit = revisit.ok ? revisit.data : null;
   store.recap.clear();
+  setRestDays(Array.isArray(store.streaks?.shields) ? store.streaks.shields : []);
   renderGoals();
   renderPainTimeline();
   renderSyncHealth();
   renderRevisit();
-  loadRecap(getLifeDate() || phoenixToday());
+  loadRecap(getSelectedDay());
 }
 
-document.addEventListener('life-date', (event) => loadRecap(event.detail));
+// The Life tab's week strip (week.js) picked a day.
+document.addEventListener('life-date', (event) => { loadRecap(event.detail); renderGoals(); renderNudges(); });
 document.addEventListener('homework-rendered', () => renderRevisit());
 
 // Called by app.js on every render (range changes, new data).
@@ -73,11 +75,13 @@ function renderRecapHtml(date, data) {
   const title = isToday ? 'Today’s recap' : 'Day recap';
   const eyebrow = `Recap · ${esc(isoLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }))}`;
   if (data === undefined) return `${head(eyebrow, title)}<p class="extra-thin">Loading…</p>`;
-  const lines = Array.isArray(data?.lines) ? data.lines.filter((l) => typeof l === 'string' && l.trim()) : [];
-  const text = typeof data?.text === 'string' ? data.text.trim() : '';
+  // XP and level live in the Goals card only.
+  const isXp = (l) => /^\s*XP\s*:/i.test(l);
+  const lines = Array.isArray(data?.lines) ? data.lines.filter((l) => typeof l === 'string' && l.trim() && !isXp(l)) : [];
+  const text = typeof data?.text === 'string' ? data.text.replace(/\s*XP:[^.]*(\.\d+[^.]*)*\.?/gi, ' ').replace(/\s{2,}/g, ' ').trim() : '';
   if (!text && !lines.length) return `${head(eyebrow, title)}${empty('☾', 'No recap for this day yet', 'MOTION texts a short recap each night; it shows here too.')}`;
   const body = lines.length ? `<ul class="recap-lines">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : `<p class="recap-text">${esc(text)}</p>`;
-  return `${head(eyebrow, title)}${body}<p class="extra-thin">What MOTION texts you at night. Follows the day picked in the timeline.</p>`;
+  return `${head(eyebrow, title)}${body}<p class="extra-thin">What MOTION texts you at night, for the day picked in the week strip.</p>`;
 }
 
 // ---------- Level, goals & streaks ----------
@@ -90,10 +94,9 @@ function levelStrip() {
   return `<div class="level-strip"><span class="level-badge">LVL ${l.level}</span><div><div class="level-label"><strong>${l.xp.toLocaleString()} XP</strong><span>${l.into}/${l.span} to LVL ${l.level + 1}</span></div><div class="goal-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${l.pct}" aria-label="Progress to the next level"><span style="width:${l.pct}%"></span></div></div></div>`;
 }
 
-function goalFromDays() {
-  // Fallback while /api/streaks isn't available: today's study goals as logged.
-  const today = phoenixToday();
-  const day = store.days.find((d) => d.date === today);
+function goalFromDays(date = phoenixToday()) {
+  // A day's study goals as logged (fallback for today while /api/streaks isn't available).
+  const day = store.days.find((d) => d.date === date);
   return (day?.goals || []).filter((g) => g && isNum(g.target_minutes) && Number(g.target_minutes) > 0);
 }
 
@@ -107,11 +110,19 @@ function renderGoals() {
   if (!el) return;
   const s = store.streaks;
   const today = phoenixToday();
-  const shields = new Set([...(Array.isArray(s?.shields) ? s.shields : []), ...store.days.filter((d) => d.shield).map((d) => d.date)]);
+  const date = getSelectedDay();
+  const isToday = date === today;
+  const dayLabel = isoLabel(date, { weekday: 'short', month: 'short', day: 'numeric' });
+  // Rest days (MOTION's recovery "shield" days) don't break streaks.
+  const restDays = new Set([...(Array.isArray(s?.shields) ? s.shields : []), ...store.days.filter((d) => d.shield).map((d) => d.date)]);
   const parts = [];
 
   const sg = s?.study_goal;
-  if (sg && isNum(sg.target_minutes) && Number(sg.target_minutes) > 0) {
+  if (!isToday) {
+    // A past day from the week strip: that day's goal as logged; streaks below stay as of today.
+    const goals = goalFromDays(date);
+    parts.push(`<section class="goal-block"><h3>Study goal · ${esc(dayLabel)}</h3>${goals.length ? goals.map((g) => goalBar({ label: g.label || canonicalSubject(g.subject), done: Number(g.done_minutes) || 0, target: Number(g.target_minutes), met: Number(g.done_minutes) >= Number(g.target_minutes) })).join('') : '<p class="extra-thin">No study goal logged that day.</p>'}</section>`);
+  } else if (sg && isNum(sg.target_minutes) && Number(sg.target_minutes) > 0) {
     const label = `${canonicalSubject(sg.subject)}${sg.label && !String(sg.label).toLowerCase().includes(String(sg.subject).toLowerCase()) ? ` · ${sg.label}` : ''}`;
     parts.push(`<section class="goal-block"><h3>Study goal today</h3>${goalBar({ label, done: Number(sg.today_minutes) || 0, target: Number(sg.target_minutes), met: Boolean(sg.met_today) })}${isNum(sg.current) ? `<p class="extra-thin">Goal streak: <b>${plural(sg.current, 'day')}</b>${isNum(sg.best) ? ` · best ${sg.best}` : ''}</p>` : ''}</section>`);
   } else {
@@ -126,15 +137,14 @@ function renderGoals() {
   const live = allHabits.filter((h) => Number(h.current) > 0).slice(0, 5);
   const lapsed = allHabits.filter((h) => !(Number(h.current) > 0) && Number(h.best) > 1);
   if (live.length || lapsed.length) {
-    parts.push(`<section class="goal-block"><h3>Habit streaks</h3>${live.length ? `<ul class="streak-list">${live.map((h) => `<li class="${h.done_today ? 'done' : ''}"><span class="streak-name">${esc(human(h.habit))}${h.done_today ? ' <small>✓ today</small>' : ''}</span><span class="streak-flame" aria-label="${plural(Number(h.current), 'day')} current streak"><span aria-hidden="true">🔥</span>${Number(h.current)}</span><span class="streak-best">best ${Number(h.best) || 0}</span></li>`).join('')}</ul>` : '<p class="extra-thin">No streak running right now.</p>'}${lapsed.length ? `<p class="extra-thin">Restart: ${lapsed.slice(0, 5).map((h) => `${esc(human(h.habit))} (best ${Number(h.best)})`).join(', ')}</p>` : ''}</section>`);
+    // One short note when a rest day sits inside a streak that is still running.
+    const longest = Math.max(0, ...live.map((h) => Number(h.current)));
+    const runEnd = live.some((h) => h.done_today) ? today : shiftIso(today, -1);
+    const restInRun = longest > 0 && [...restDays].some((d) => d <= runEnd && d > shiftIso(runEnd, -longest));
+    parts.push(`<section class="goal-block"><h3>Habit streaks${isToday ? '' : ' <span class="extra-thin">(as of today)</span>'}</h3>${live.length ? `<ul class="streak-list">${live.map((h) => `<li class="${h.done_today ? 'done' : ''}"><span class="streak-name">${esc(human(h.habit))}${h.done_today ? ' <small>✓ today</small>' : ''}</span><span class="streak-flame" aria-label="${plural(Number(h.current), 'day')} current streak"><span aria-hidden="true">🔥</span>${Number(h.current)}</span><span class="streak-best">best ${Number(h.best) || 0}</span></li>`).join('')}</ul>` : '<p class="extra-thin">No streak running right now.</p>'}${restInRun ? '<p class="extra-thin">🛌 Includes a rest day (doesn’t break streaks).</p>' : ''}${lapsed.length ? `<p class="extra-thin">Restart: ${lapsed.slice(0, 5).map((h) => `${esc(human(h.habit))} (best ${Number(h.best)})`).join(', ')}</p>` : ''}</section>`);
   }
 
-  if (s || shields.size) {
-    const strip = Array.from({ length: 14 }, (_, i) => shiftIso(today, i - 13));
-    if (shields.size) parts.push(`<section class="goal-block"><h3>Shield days <span class="extra-thin">(don’t break streaks)</span></h3><ol class="shield-strip" aria-label="Last 14 days">${strip.map((d) => `<li class="${shields.has(d) ? 'on' : ''}" title="${esc(isoLabel(d, { weekday: 'short', month: 'short', day: 'numeric' }))}${shields.has(d) ? ': shield day' : ''}"><span aria-hidden="true">${shields.has(d) ? '🛡' : ''}</span><small>${Number(d.slice(8))}</small><span class="sr-only">${esc(isoLabel(d, { month: 'short', day: 'numeric' }))}${shields.has(d) ? ', shield day' : ''}</span></li>`).join('')}</ol></section>`);
-  }
-
-  el.innerHTML = `${head('Today', 'Level, goals &amp; streaks')}${levelStrip()}${parts.filter(Boolean).length ? parts.filter(Boolean).join('') : empty('🔥', 'No goals or streaks yet', s === null ? 'Streaks show up here once MOTION starts tracking them. Set a study goal by texting MOTION something like “goal: 120 min of math today”.' : 'Set a study goal or log a habit two days in a row to start a streak.')}`;
+  el.innerHTML = `${head(isToday ? 'Today' : esc(dayLabel), 'Level, goals &amp; streaks')}${levelStrip()}${parts.filter(Boolean).length ? parts.filter(Boolean).join('') : empty('🔥', 'No goals or streaks yet', s === null ? 'Streaks show up here once MOTION starts tracking them. Set a study goal by texting MOTION something like “goal: 120 min of math today”.' : 'Set a study goal or log a habit two days in a row to start a streak.')}`;
 }
 
 // ---------- Sleep ----------
@@ -148,7 +158,10 @@ function sleepNight(d) {
   const bedLogged = bed !== null, wakeLogged = wake !== null;
   if (bed === null && wake !== null && hours) { bed = ((wake - hours * 60) % 1440 + 1440) % 1440; calculated = true; }
   if (wake === null && bed !== null && hours) { wake = (bed + hours * 60) % 1440; calculated = true; }
-  return { date: d.date, hours, bed, wake, calculated, bedLogged, wakeLogged };
+  // Separate stretches (e.g. woke at 4, back to sleep at 4:45) when MOTION logged them.
+  const segments = (Array.isArray(d.sleep_segments) ? d.sleep_segments : []).map((s) => ({ a: clockMinutes(s?.start), b: clockMinutes(s?.end), nap: Boolean(s?.nap) })).filter((s) => s.a !== null && s.b !== null);
+  const stretches = segments.filter((s) => !s.nap).length;
+  return { date: d.date, hours, bed, wake, calculated, bedLogged, wakeLogged, segments, stretches };
 }
 
 function renderSleep() {
@@ -173,11 +186,13 @@ function renderSleep() {
       <div class="sleep-axis" aria-hidden="true"><span></span><div>${ticks.map(([m, l]) => `<span style="left:${(m / WINDOW) * 100}%">${l}</span>`).join('')}</div><span></span></div>
       ${shown.map((n) => {
         let bar = '';
-        if (n.bed !== null && n.wake !== null) {
+        if (n.segments.length > 1) {
+          bar = n.segments.map((s) => { const a = toWindow(s.a), b = toWindow(s.b); return b > a ? `<i class="${s.nap ? 'nap' : ''}" style="left:${(a / WINDOW) * 100}%;width:${((b - a) / WINDOW) * 100}%" title="${s.nap ? 'Nap' : 'Sleep'} ${clockLabel(s.a)} → ${clockLabel(s.b)}"></i>` : ''; }).join('');
+        } else if (n.bed !== null && n.wake !== null) {
           const a = toWindow(n.bed), b = toWindow(n.wake);
           if (b > a) bar = `<i class="${n.calculated ? 'calc' : ''}" style="left:${(a / WINDOW) * 100}%;width:${((b - a) / WINDOW) * 100}%" title="${clockLabel(n.bed)} → ${clockLabel(n.wake)}${n.calculated ? ' (one time calculated from hours slept)' : ''}"></i>`;
         }
-        return `<div class="sleep-row"><span class="sleep-date">${esc(isoLabel(n.date, { weekday: 'short', day: 'numeric' }))}</span><div class="sleep-track">${bar || '<em>times not logged</em>'}</div><b>${n.hours !== null ? `${Math.round(n.hours * 10) / 10}h` : '—'}</b></div>`;
+        return `<div class="sleep-row"><span class="sleep-date">${esc(isoLabel(n.date, { weekday: 'short', day: 'numeric' }))}</span><div class="sleep-track">${bar || '<em>times not logged</em>'}</div><b>${n.hours !== null ? `${Math.round(n.hours * 10) / 10}h` : '—'}${n.stretches > 1 ? `<small> · ${n.stretches} stretches</small>` : ''}</b></div>`;
       }).join('')}
     </div>
     <p class="extra-thin">Each row is the night before that morning; dashed = one time calculated from hours slept.${nights.length > shown.length ? ` Latest ${shown.length} nights.` : ''}</p>`;
@@ -290,7 +305,8 @@ renderSyncHealth();
 function renderNudges() {
   const el = $('nudges-card');
   if (!el) return;
-  const list = (Array.isArray(store.nudges?.nudges) ? store.nudges.nudges : []).filter((n) => n?.text && n.for !== 'motion');
+  // "Right now" advice only makes sense while today is the day picked.
+  const list = getSelectedDay() !== phoenixToday() ? [] : (Array.isArray(store.nudges?.nudges) ? store.nudges.nudges : []).filter((n) => n?.text && n.for !== 'motion');
   el.hidden = !list.length;
   if (!list.length) { el.innerHTML = ''; return; }
   el.innerHTML = `${head('Right now', 'Heads up')}<ul class="nudge-list">${list.map((n) => `<li class="${n.level === 'warn' ? 'warn' : ''}"><span aria-hidden="true">${n.level === 'warn' ? '!' : '•'}</span>${esc(n.text)}</li>`).join('')}</ul>`;

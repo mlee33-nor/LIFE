@@ -213,3 +213,16 @@ test('a night with a wake-up in the middle counts both stretches of sleep', () =
   assert.deepEqual(d.sleep_segments.map((x) => [x.start.slice(11, 16), x.end.slice(11, 16), x.minutes, Boolean(x.nap)]),
     [['01:00', '04:00', 180, false], ['04:45', '08:00', 195, false], ['15:00', '16:00', 60, true]]);
 });
+
+test('a renamed goal for the same subject replaces the old one; exam date in the notes adds a countdown; mood rows', () => {
+  const r = run(csv(
+    'g1,2026-09-28,8:52,,Life,goal,daily_target,Math practice / review,120,minutes per day,,active,,,120,,0,,,,,,,,',
+    'g2,2026-10-03,08:30,,Life,goal,daily_target,Math Daily Goal,150,minutes,,user_reported,,,,,,,,,,Math daily goal updated to 150 min for exam prep (exam Oct 13).,,2026-10-03,',
+    'm1,2026-10-03,08:30,,Life,mood,checkin,Emotion,motivated,,positive,user_reported,,,,,,,,,,Feeling oddly motivated today.,,2026-10-03,',
+  ));
+  const oct3 = r.daily.find((d) => d.date === '2026-10-03');
+  assert.deepEqual(oct3.goals.map((g) => [g.subject, g.target_minutes]), [['math', 150]]);
+  assert.deepEqual(r.exams.map((e) => [e.label, e.subject, e.date]), [['Math Exam', 'math', '2026-10-13']]);
+  assert.deepEqual(oct3.moods[0].feelings, ['motivated']);
+  assert.equal(oct3.moods[0].notes, 'Feeling oddly motivated today.');
+});

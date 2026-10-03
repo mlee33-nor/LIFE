@@ -1,10 +1,15 @@
 // Live "Synced N min ago" in the header, from /api/health (public), so it's
 // always clear whether the Google Sheet sync is working. This module is the
 // only one that writes the #sync-state badge; app.js reports data loads here.
+// It also owns "MOTION logged N min ago" (#motion-heard, from last_write_at):
+// amber when MOTION has been quiet for over 6 hours between 8 AM and midnight.
 
 const API_BASE = window.SOMA_API_BASE ?? '';
 const LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
 let timer = null;
+let lastWrite = null;
+const QUIET_MS = 6 * 3600000;
+const phoenixHourNow = () => Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Phoenix', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
 let dataState = { loaded: false, offline: false, sample: false };
 
 function label(sync) {
@@ -25,6 +30,26 @@ function paint({ text, ok, title = '' }) {
   el.title = title;
 }
 
+function ago(ms) {
+  const m = Math.max(0, Math.floor(ms / 60000));
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  return h < 48 ? `${h} h ago` : `${Math.floor(h / 24)} days ago`;
+}
+
+function paintHeard() {
+  const el = document.getElementById('motion-heard');
+  if (!el) return;
+  const t = Date.parse(lastWrite ?? '');
+  if (!Number.isFinite(t)) { el.hidden = true; return; }
+  const quiet = Date.now() - t > QUIET_MS && phoenixHourNow() >= 8; // 8 AM - midnight
+  el.hidden = false;
+  el.textContent = `MOTION logged ${ago(Date.now() - t)}`;
+  el.classList.toggle('quiet', quiet);
+  el.title = `Last entry written ${new Date(t).toLocaleString('en-US', { timeZone: 'America/Phoenix', weekday: 'short', hour: 'numeric', minute: '2-digit' })}${quiet ? ' · nothing new for over 6 hours' : ''}`;
+}
+
 async function refresh() {
   const el = document.getElementById('sync-state');
   if (!el || document.body.classList.contains('is-locked')) return;
@@ -35,6 +60,8 @@ async function refresh() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const health = await res.json();
     paint(label(health.sheet_sync));
+    lastWrite = health.last_write_at ?? null;
+    paintHeard();
   } catch {
     paint({ text: dataState.loaded ? 'Offline · showing last loaded data' : 'Offline · can’t reach your data', ok: false });
   }

@@ -1,8 +1,10 @@
-import { phoenixToday, shiftIso } from './util.js';
+import { phoenixToday } from './util.js';
+import { getSelectedDay } from './week.js';
 
 // "Today's to-dos": the day's task list from GET /api/todos, written by
 // MOTION (sheet rows with category "todo", or entries on its log form).
-// Unfinished tasks from earlier days are carried over below.
+// Unfinished tasks from earlier days are carried over below. The day is the
+// one picked in the Life tab's week strip (week.js).
 
 const API_BASE = window.SOMA_API_BASE ?? '';
 const API_KEY = window.SOMA_API_KEY ?? (() => { try { return localStorage.getItem('soma-api-key') ?? ''; } catch { return ''; } })();
@@ -12,16 +14,19 @@ const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&
 const niceDate = (iso, opts = { weekday: 'long', month: 'short', day: 'numeric' }) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', ...opts });
 
 
+document.addEventListener('life-date', () => loadTodos());
+
 export async function loadTodos() {
   const el = document.getElementById('todo-card');
   if (!el) return;
   let data = null;
   try {
-    const q = state.date ? `?date=${state.date}` : '';
+    state.date = getSelectedDay();
+    const q = `?date=${state.date}`;
     const res = await fetch(`${API_BASE}/api/todos${q}`, { headers: API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {} });
     if (res.ok) data = await res.json();
   } catch { /* offline: show the empty state */ }
-  if (data) state.date = data.date;
+  if (state.date !== getSelectedDay()) return; // a newer day was picked meanwhile
   state.canEdit = Boolean(data?.can_edit);
   render(el, data);
 }
@@ -52,20 +57,24 @@ function item(t, extra = '') {
 }
 
 function render(el, data) {
-  const date = data?.date ?? state.date;
+  const date = state.date ?? data?.date;
   const todos = data?.todos ?? [];
   const carried = data?.carried_over ?? [];
   const pct = data?.total ? Math.round((data.done / data.total) * 100) : 0;
   const today = phoenixToday();
   const isToday = date === today;
 
+  // Nothing to show or do: one slim line instead of a whole card.
+  const slim = !todos.length && !carried.length && !canEdit();
+  el.classList.toggle('is-slim', slim);
+  if (slim) {
+    el.innerHTML = `<p class="todo-slim"><span aria-hidden="true">☐</span> No to-dos for ${isToday ? 'today' : esc(date ? niceDate(date, { weekday: 'short', month: 'short', day: 'numeric' }) : 'this day')} — text MOTION to add one</p>`;
+    return;
+  }
+
   el.innerHTML = `
     <div class="todo-head">
       <div><p class="eyebrow">${isToday ? 'Today' : 'Day'} · ${esc(date ? niceDate(date) : '')}</p><h2>To-dos</h2></div>
-      <div class="todo-nav">
-        <button type="button" data-shift="-1" aria-label="Previous day">←</button>
-        <button type="button" data-shift="1" aria-label="Next day" ${!date || date >= today ? 'disabled' : ''}>→</button>
-      </div>
     </div>
     ${data?.total ? `<div class="todo-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Tasks done"><span style="width:${pct}%"></span></div><p class="todo-count">${data.done} of ${data.total} done</p>` : ''}
     ${todos.length
@@ -89,11 +98,4 @@ function render(el, data) {
     } catch (err) { fail(err); }
   });
 
-  el.querySelectorAll('[data-shift]').forEach((btn) => btn.addEventListener('click', () => {
-    if (!date) return;
-    const next = shiftIso(date, Number(btn.dataset.shift));
-    if (next > today) return; // never past today (Phoenix)
-    state.date = next;
-    loadTodos();
-  }));
 }

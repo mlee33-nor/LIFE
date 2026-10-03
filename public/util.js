@@ -75,7 +75,8 @@ export const sameText = (a, b) => String(a ?? '').trim().toLowerCase() === Strin
 export const activityNames = { hmwk: 'Homework', work: 'Work', workout: 'Workout', walk: 'Walking', chores: 'Chores', routine: 'Routine', rest: 'Rest', social: 'Social', sleep: 'Sleep' };
 // One fixed, saturated hue per activity/subject. Colours follow the thing,
 // never its position. Every colour is >= 3:1 against the light card and
-// replay backgrounds (#fffdf8 / #f3eff8) so bars and dots stay visible.
+// replay backgrounds (#fffdf8 / #f3eff8), and its dark-theme twin in
+// theme.css is >= 3:1 against the dark card, so bars and dots stay visible.
 const palette = {
   work: '#2563eb',                                             // blue
   hmwk: '#7c3aed', general: '#7c3aed',                         // violet: homework with no subject
@@ -91,13 +92,16 @@ const palette = {
   social: '#dc2626',                                           // red
   rest: '#64748b', sleep: '#475569',                           // slate: downtime
 };
-export function colorFor(key) {
+// Each hex above is the light-theme value of a CSS token (--act-<hex> in
+// theme.css), so the dark theme can lighten the same hue for contrast.
+export const colorHex = (key) => {
   if (!key) return '#6b7280';
   const k = String(key).toLowerCase();
   if (palette[k]) return palette[k];
   // Unknown homework subjects stay violet; unknown activities are neutral.
   return activityNames[k] ? '#6b7280' : palette.hmwk;
-}
+};
+export const colorFor = (key) => `var(--act-${colorHex(key).slice(1)})`;
 
 // Productive time only: rest, naps, sleep and social don't count as "active".
 export const PRODUCTIVE = new Set(['work', 'hmwk', 'homework', 'workout', 'walk', 'chores']);

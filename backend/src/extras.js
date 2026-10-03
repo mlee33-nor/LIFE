@@ -439,7 +439,8 @@ export function recap(daily, { date } = {}) {
   }
   for (const g of studyGoals(d)) {
     const done = goalDone(g, d) ?? 0;
-    lines.push(`${cap(g.label || g.subject)} goal: ${done}/${g.target_minutes} min${done >= g.target_minutes ? ', met' : ', not met'}.`);
+    const name = cap(g.label || g.subject);
+    lines.push(`${/goal|target/i.test(name) ? name : `${name} goal`}: ${done}/${g.target_minutes} min${done >= g.target_minutes ? ', met' : ', not met'}.`);
   }
 
   // Work and DoorDash.

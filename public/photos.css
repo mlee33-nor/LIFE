@@ -25,7 +25,7 @@ body[data-dashboard="acne"] .skin-photos-card { display: block; }
 .photo-day-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 13px; }
 .photo-day-head span { color: var(--muted, #6b6b6b); }
 .photo-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
-.photo-thumb { position: relative; display: block; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 10px; background: #eee; }
+.photo-thumb { position: relative; display: block; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 10px; background: var(--bg-eeeeee); }
 .photo-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .2s; }
 .photo-thumb:hover img { transform: scale(1.04); }
 .photo-thumb span { position: absolute; bottom: 6px; left: 6px; padding: 2px 7px; border-radius: 6px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; }

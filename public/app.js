@@ -8,7 +8,9 @@ import { startSyncStatus, refreshSyncStatus, reportDataLoad, reportLoading } fro
 import { loadReview } from './review.js';
 import { loadExtras, renderDayCards, renderRevisit, renderLevel } from './extras.js';
 import { loadDoorDash } from './doordash.js';
-import { phoenixToday, phoenixLabel, greeting, shiftIso, isoLabel, plural, isNum, sameText, canonicalSubject, isProductive } from './util.js';
+import { renderWeekStrip } from './week.js';
+import { renderSkincare } from './skincare.js';
+import { phoenixToday, phoenixLabel, greeting, shiftIso, isoLabel, plural, isNum, sameText, canonicalSubject, isProductive, clockMinutes, clockLabel, daysBetween } from './util.js';
 const API_BASE = window.SOMA_API_BASE ?? '';
 const API_KEY = getKey();
 const LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
@@ -35,7 +37,7 @@ const sampleDays = rawSamples.map(([date, stomach_pain, acne, water, meals_logge
   event_count: meals_logged + habits_done + 1
 }));
 
-const state = { days:[], filtered:[], previous:[], rangeDays:14, source:'sample', series:{pain:true, acne:true}, summary:null, foodInsights:null, lifestyleInsights:null, blueprint:null, foodCompass:null, focusCurve:null, faceDate:null, faceZone:null, faceWeekEnd:null, panel:'overview' };
+const state = { days:[], filtered:[], previous:[], rangeDays:14, source:'sample', series:{pain:true, acne:true}, summary:null, foodInsights:null, lifestyleInsights:null, blueprint:null, foodCompass:null, focusCurve:null, faceDate:null, faceZone:null, faceWeekEnd:null, panel:'overview', bodyTab:'stomach' };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const num = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -69,7 +71,7 @@ const sessionText = s => { const name = sessionName(s), subject = s.subject ? ca
 function normalizeDay(day) {
   return {
     date:day.date, event_count:num(day.event_count), stomach_pain:maybeNum(day.stomach_pain), acne:maybeNum(day.acne), acne_spots:maybeNum(day.acne_spots),
-    wake_time:day.wake_time ?? null, bedtime:day.bedtime ?? null, mb:num(day.mb), mb_events:Array.isArray(day.mb_events) ? day.mb_events : [], sleep_hours:maybeNum(day.sleep_hours),
+    wake_time:day.wake_time ?? null, bedtime:day.bedtime ?? null, mb:num(day.mb), mb_events:Array.isArray(day.mb_events) ? day.mb_events : [], sleep_hours:maybeNum(day.sleep_hours), sleep_segments:Array.isArray(day.sleep_segments) ? day.sleep_segments.filter(s => s && typeof s === 'object') : [],
     xp:maybeNum(day.xp), headache:maybeNum(day.headache), headache_reports:day.headache_reports||[], missed_habits:day.missed_habits||[], pain_reports:day.pain_reports||[], social_minutes:num(day.social_minutes), rest_minutes:num(day.rest_minutes),
     water:maybeNum(day.water), meals_logged:num(day.meals_logged), habits_done:num(day.habits_done),
     work_minutes:num(day.work_minutes), hmwk_minutes:num(day.hmwk_minutes), workout_minutes:num(day.workout_minutes), walk_minutes:num(day.walk_minutes), chores_minutes:num(day.chores_minutes), hmwk_by_subject:day.hmwk_by_subject||{},
@@ -129,7 +131,8 @@ async function loadData({announce = false} = {}) {
   loadReview();
   loadExtras({ days: state.days });
   loadDoorDash();
-  if (announce) showToast(state.source === 'api' ? 'MOTION data synced' : 'Local sample data reloaded');
+  // MOTION syncs on its own; this only re-reads what the server already has.
+  if (announce) showToast(state.source === 'api' ? 'Refreshed just now · MOTION syncs automatically' : 'Local sample data reloaded');
 }
 
 // Calendar periods: "this period" is the last N days ending today (Phoenix);
@@ -158,12 +161,16 @@ function activeSession() {
 
 function renderAll() {
   const active = activeSession();
+  renderWeekStrip(state.days);
+  updatePatternsNav();
   renderLifeAnalytics(state.days, state.source, { now: active ? describeSession(active) : null, since: active?.started_at ?? null });
   renderHomeworkAnalytics(state.days, state.source, { range: $('#range-select').value });
   renderRevisit();
   renderDayCards({ days: state.days, filtered: state.filtered, rangeDays: state.rangeDays });
   renderLevel(levelInfo());
   renderMetrics();
+  renderStomachHeadline();
+  renderSkincare({ days: state.days, rangeDays: state.rangeDays });
   renderBlueprint();
   renderSignalsChart();
   renderKitchenCompass();
@@ -335,28 +342,17 @@ function setPeriodTrend(el, current, previous, { lowerIsBetter = false, format =
 function renderMetrics() {
   const caption = $('#metric-compare-note');
   if (!state.filtered.length) {
-    ['#pain-value','#acne-value','#activity-value','#habits-value'].forEach(sel => { $(sel).textContent = '—'; });
-    ['#pain-change','#acne-change','#activity-change','#habits-change'].forEach(sel => setTrend($(sel),'no data yet',false,true));
+    ['#acne-value','#activity-value','#habits-value'].forEach(sel => { $(sel).textContent = '—'; });
+    ['#acne-change','#activity-change','#habits-change'].forEach(sel => setTrend($(sel),'no data yet',false,true));
     $('#habits-progress').style.width = '0%';
-    ['#pain-sparkline','#acne-sparkline','#activity-sparkline'].forEach(sel => { $(sel).innerHTML = ''; });
+    ['#acne-sparkline','#activity-sparkline'].forEach(sel => { $(sel).innerHTML = ''; });
     if (caption) caption.textContent = state.rangeDays ? `Nothing logged in the last ${plural(state.rangeDays, 'day')}.` : 'Nothing logged yet.';
     return;
   }
   const cur = state.filtered, prev = state.previous;
   if (caption) caption.textContent = state.rangeDays ? `Arrows compare the last ${plural(state.rangeDays, 'day')} with the ${plural(state.rangeDays, 'day')} before. Averages use logged days only.` : 'All time. Averages use logged days only.';
 
-  // Stomach
-  const pain = meanOrNull(cur.map(d => d.stomach_pain)), prevPain = meanOrNull(prev.map(d => d.stomach_pain));
-  const reports = cur.reduce((sum, d) => sum + d.pain_reports.length, 0);
-  if (pain === null) {
-    $('#pain-value').textContent = reports ? plural(reports, 'report') : '—';
-    $('#pain-value').nextElementSibling.textContent = reports ? 'pain reported, no score' : '/ 10 avg';
-    setTrend($('#pain-change'), reports ? 'unscored' : 'not logged', false, true);
-  } else {
-    $('#pain-value').textContent = pain.toFixed(1);
-    $('#pain-value').nextElementSibling.textContent = '/ 10 avg';
-    setPeriodTrend($('#pain-change'), pain, prevPain, { lowerIsBetter:true, stable:0.05 });
-  }
+  // Stomach has its own headline (renderStomachHeadline).
 
   // Skin: severity when logged, otherwise the spot count.
   const skin = skinMeasure(cur);
@@ -378,9 +374,8 @@ function renderMetrics() {
   $('#habits-progress').style.width = `${clamp(((habits ?? 0)/8)*100,0,100)}%`;
 
   const series = key => [...cur].reverse().map(d => d[key]).filter(isNum).map(Number);
-  renderSparkline('#pain-sparkline', series('stomach_pain'), '#537b69', '#deebe3');
-  renderSparkline('#acne-sparkline', series(skin.key), '#d67968', '#f7e3de');
-  renderSparkline('#activity-sparkline', [...cur].reverse().map(totalActivity), '#66859a', '#e2ebef');
+  renderSparkline('#acne-sparkline', series(skin.key), 'var(--spark-skin)', 'var(--spark-skin-fill)');
+  renderSparkline('#activity-sparkline', [...cur].reverse().map(totalActivity), 'var(--spark-activity)', 'var(--spark-activity-fill)');
 }
 
 // Which skin number to show: severity (0-10) if any is logged, else spot count.
@@ -388,6 +383,39 @@ function skinMeasure(days) {
   if (days.some(d => d.acne !== null)) return { key:'acne', label:'Skin severity', max:10 };
   if (days.some(d => d.acne_spots !== null)) return { key:'acne_spots', label:'Spots', max:Math.max(5, Math.ceil(Math.max(...days.map(d => num(d.acne_spots))) / 5) * 5) };
   return { key:'acne', label:'Skin severity', max:10 };
+}
+
+// ---------- Stomach headline ----------
+// A pain episode is any pain report with no score or a score above 0 (most
+// reports are unscored, so an average alone would read as "no problems").
+// A scored day with no report counts as one episode.
+const isEpisode = r => r && (!isNum(r.pain) || Number(r.pain) > 0);
+const unscoredCount = day => day.pain_reports.filter(r => r && !isNum(r.pain)).length;
+function painEpisodes(days) {
+  return days.flatMap(d => {
+    const list = d.pain_reports.filter(isEpisode).map(r => ({ date:d.date, at:r.at ?? null, pain:isNum(r.pain) ? Number(r.pain) : null, text:r.text || '' }));
+    if (!list.length && Number(d.stomach_pain) > 0) list.push({ date:d.date, at:null, pain:Number(d.stomach_pain), text:'' });
+    return list;
+  }).sort((a, b) => String(b.at ?? b.date).localeCompare(String(a.at ?? a.date)));
+}
+
+function renderStomachHeadline() {
+  const el = $('#stomach-headline');
+  if (!el) return;
+  const today = phoenixToday();
+  const scope = state.rangeDays ? `Last ${plural(state.rangeDays, 'day')}` : 'All time';
+  const inRange = painEpisodes(state.filtered), all = painEpisodes(state.days.filter(d => d.date <= today));
+  const last = all[0] || null;
+  const scored = inRange.filter(e => e.pain !== null);
+  const sinceDays = last ? daysBetween(last.date, today) : null;
+  const when = last ? `${isoLabel(last.date, { weekday:'short', month:'short', day:'numeric' })}${clockMinutes(last.at) !== null ? ` · ${clockLabel(clockMinutes(last.at))}` : ''}` : '';
+  const prev = state.rangeDays && state.previous.length ? painEpisodes(state.previous).length : null;
+  el.innerHTML = `<div class="extra-head"><div><p class="eyebrow">Stomach · ${escapeHtml(scope)}</p><h2>${inRange.length ? plural(inRange.length, 'pain episode') : 'No pain episodes'}</h2></div>${prev !== null ? `<span class="extra-chip">previous ${plural(state.rangeDays, 'day')}: ${prev}</span>` : ''}</div>
+    <div class="stomach-stats">
+      <div><span>Days since last episode</span><strong>${sinceDays === null ? '—' : sinceDays === 0 ? 'Today' : plural(sinceDays, 'day')}</strong><small>${last ? '' : 'no pain reported yet'}</small></div>
+      <div class="wide"><span>Last episode</span><strong>${last ? escapeHtml(when) : '—'}</strong><small>${last?.text ? `“${escapeHtml(last.text)}”` : last ? (last.pain !== null ? `pain ${last.pain}/10` : 'no note') : 'Tell MOTION when your stomach hurts and what you ate.'}</small></div>
+      <div><span>Scores</span><strong>${scored.length ? `avg ${(scored.reduce((sum, e) => sum + e.pain, 0) / scored.length).toFixed(1)}<small>/10</small>` : '—'}</strong><small>${inRange.length ? (scored.length ? `${scored.length} of ${inRange.length} scored` : 'none of these were given a 0–10 score') : 'nothing to score'}</small></div>
+    </div>`;
 }
 
 function describeSession(session) {
@@ -400,7 +428,7 @@ function renderSparkline(selector,values,stroke,fill) {
   const width=180,height=28,max=Math.max(...values,1),min=Math.min(...values,0),span=max-min||1;
   const points=values.map((value,index)=>[index*width/Math.max(values.length-1,1),height-3-((value-min)/span)*20]);
   const line=points.map((point,index)=>`${index?'L':'M'}${point[0].toFixed(1)},${point[1].toFixed(1)}`).join(' ');
-  el.innerHTML=`<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true"><path class="area" d="${line} L${width},${height} L0,${height} Z" fill="${fill}" opacity=".55"/><path d="${line}" stroke="${stroke}" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>`;
+  el.innerHTML=`<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true"><path class="area" d="${line} L${width},${height} L0,${height} Z" style="fill:${fill}" opacity=".55"/><path d="${line}" style="stroke:${stroke}" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>`;
 }
 
 // ---------- Body signals chart ----------
@@ -411,21 +439,21 @@ function renderSignalsChart() {
   if (!wrap) return;
   const skin = skinMeasure(days);
   const series = [
-    state.series.pain && { key:'stomach_pain', label:'Stomach', unit:'/10', color:'#537b69', dash:'' },
-    state.series.acne && { key:skin.key, label:skin.key === 'acne_spots' ? 'Spots' : 'Skin', unit:skin.key === 'acne_spots' ? ' spots' : '/10', color:'#d67968', dash:'5 5' }
+    state.series.pain && { key:'stomach_pain', label:'Stomach', unit:'/10', color:'var(--chart-pain)', dash:'' },
+    state.series.acne && { key:skin.key, label:skin.key === 'acne_spots' ? 'Spots' : 'Skin', unit:skin.key === 'acne_spots' ? ' spots' : '/10', color:'var(--chart-skin)', dash:'5 5' }
   ].filter(Boolean);
-  const hasValues = series.some(s => days.some(d => d[s.key] !== null));
+  // Unscored pain reports still show: hollow dots on a "no score" row on top.
+  const hollow = state.series.pain && days.some(d => unscoredCount(d));
+  const hasValues = hollow || series.some(s => days.some(d => d[s.key] !== null));
   if (!days.length || !hasValues) {
-    const reports = days.reduce((sum, d) => sum + d.pain_reports.length, 0);
-    const msg = !days.length ? 'No signals in this date range.'
-      : state.series.pain && !state.series.acne && reports ? `Pain was reported ${plural(reports, 'time')} in this range, but without a 0–10 score, so there is nothing to plot yet.`
-      : 'Nothing scored for this signal in this date range yet.';
+    const msg = !days.length ? 'No signals in this date range.' : 'Nothing logged for this signal in this date range yet.';
     wrap.innerHTML = `<div class="empty-state">${escapeHtml(msg)}</div>`;
     return;
   }
   const yMax = series.some(s => s.key === 'acne_spots') ? skin.max : 10;
   const width = Math.max(260, Math.round(wrap.clientWidth || 720)), narrow = width < 520;
-  const height = narrow ? 190 : 220, pad = { top:14, right:14, bottom:30, left:30 };
+  const height = (narrow ? 190 : 220) + (hollow ? 22 : 0), pad = { top:hollow ? 36 : 14, right:14, bottom:30, left:hollow ? 58 : 30 };
+  const rowY = 14;
   const innerWidth = width - pad.left - pad.right, innerHeight = height - pad.top - pad.bottom;
   const x = i => pad.left + (days.length === 1 ? innerWidth / 2 : (i / (days.length - 1)) * innerWidth);
   const y = v => pad.top + innerHeight - (clamp(v ?? 0, 0, yMax) / yMax) * innerHeight;
@@ -436,9 +464,10 @@ function renderSignalsChart() {
   const labelled = new Set(); for (let i = days.length - 1; i >= 0; i -= stride) labelled.add(i);
   const labels = days.map((day, i) => labelled.has(i) ? `<text class="axis-text" x="${x(i).toFixed(1)}" y="${height - 8}" text-anchor="middle">${shortDate(day.date)}</text>` : '').join('');
   const path = key => days.map((d, i) => d[key] === null ? '' : `${i && days[i-1][key] !== null ? 'L' : 'M'}${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join(' ');
-  const points = s => days.map((d, i) => d[s.key] === null ? '' : `<g class="chart-point" tabindex="0" role="button" data-index="${i}" aria-label="${escapeHtml(`${shortDate(d.date)}: ${s.label} ${d[s.key]}${s.unit}`)}"><circle class="hit" cx="${x(i).toFixed(1)}" cy="${y(d[s.key]).toFixed(1)}" r="14"/><circle class="point" cx="${x(i).toFixed(1)}" cy="${y(d[s.key]).toFixed(1)}" r="4" fill="${s.color}"/></g>`).join('');
+  const points = s => days.map((d, i) => d[s.key] === null ? '' : `<g class="chart-point" tabindex="0" role="button" data-index="${i}" aria-label="${escapeHtml(`${shortDate(d.date)}: ${s.label} ${d[s.key]}${s.unit}`)}"><circle class="hit" cx="${x(i).toFixed(1)}" cy="${y(d[s.key]).toFixed(1)}" r="14"/><circle class="point" cx="${x(i).toFixed(1)}" cy="${y(d[s.key]).toFixed(1)}" r="4" style="fill:${s.color}"/></g>`).join('');
+  const hollowRow = !hollow ? '' : `<text class="axis-text" x="${pad.left - 12}" y="${rowY + 4}" text-anchor="end">no score</text><line class="grid-line dashed" x1="${pad.left}" y1="${rowY}" x2="${width - pad.right}" y2="${rowY}"/>${days.map((d, i) => { const n = unscoredCount(d); return n ? `<g class="chart-point" tabindex="0" role="button" data-index="${i}" aria-label="${escapeHtml(`${shortDate(d.date)}: pain reported${n > 1 ? ` ${n} times` : ''}, no score`)}"><circle class="hit" cx="${x(i).toFixed(1)}" cy="${rowY}" r="14"/><circle class="point hollow" cx="${x(i).toFixed(1)}" cy="${rowY}" r="5"/>${n > 1 ? `<text class="axis-text" x="${(x(i) + 8).toFixed(1)}" y="${rowY - 6}">×${n}</text>` : ''}</g>` : ''; }).join('')}`;
   const title = `${series.map(s => s.label).join(' and ')} by day, ${shortDate(days[0].date)} to ${shortDate(days.at(-1).date)}`;
-  wrap.innerHTML = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="group" aria-labelledby="signals-title"><title id="signals-title">${escapeHtml(title)}</title>${ticks.map(v => `<line class="grid-line" x1="${pad.left}" y1="${y(v).toFixed(1)}" x2="${width - pad.right}" y2="${y(v).toFixed(1)}"/><text class="axis-text" x="${pad.left - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${v}</text>`).join('')}${series.map(s => `<path class="series-line" d="${path(s.key)}" stroke="${s.color}" ${s.dash ? `stroke-dasharray="${s.dash}"` : ''}/>`).join('')}${series.map(points).join('')}${labels}</svg>`;
+  wrap.innerHTML = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="group" aria-labelledby="signals-title"><title id="signals-title">${escapeHtml(title)}</title>${ticks.map(v => `<line class="grid-line" x1="${pad.left}" y1="${y(v).toFixed(1)}" x2="${width - pad.right}" y2="${y(v).toFixed(1)}"/><text class="axis-text" x="${pad.left - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${v}</text>`).join('')}${series.map(s => `<path class="series-line" d="${path(s.key)}" style="stroke:${s.color}" ${s.dash ? `stroke-dasharray="${s.dash}"` : ''}/>`).join('')}${series.map(points).join('')}${hollowRow}${labels}</svg>${hollow ? '<p class="chart-note">Hollow dots on the top row: pain was reported without a 0–10 score.</p>' : ''}`;
   const hide = () => $('.chart-tooltip', wrap)?.remove();
   $$('.chart-point', wrap).forEach(point => {
     const show = () => showChartTooltip(point, days[num(point.dataset.index)], series);
@@ -458,7 +487,8 @@ function showChartTooltip(point, day, series) {
   const tip = document.createElement('div');
   tip.className = 'chart-tooltip';
   tip.setAttribute('role', 'status');
-  tip.innerHTML = `<strong>${shortDate(day.date)}</strong>${series.map(s => `<span>${s.label} ${day[s.key] ?? 'not logged'}${day[s.key] !== null ? s.unit : ''}</span>`).join('')}`;
+  const unscored = state.series.pain ? day.pain_reports.filter(r => r && !isNum(r.pain)) : [];
+  tip.innerHTML = `<strong>${shortDate(day.date)}</strong>${series.map(s => `<span>${s.label} ${day[s.key] ?? 'not scored'}${day[s.key] !== null ? s.unit : ''}</span>`).join('')}${unscored.length ? `<span>Pain reported${unscored.length > 1 ? ` ×${unscored.length}` : ''}, no score</span>${unscored[0].text ? `<span>“${escapeHtml(unscored[0].text)}”</span>` : ''}` : ''}`;
   const rect = wrap.getBoundingClientRect(), box = point.querySelector('.point').getBoundingClientRect();
   tip.style.left = `${clamp(box.left + box.width / 2 - rect.left, 55, rect.width - 55)}px`;
   tip.style.top = `${box.top - rect.top}px`;
@@ -662,11 +692,14 @@ function renderRecent() {
   const mode = ['acne','stomach'].includes(document.body.dataset.dashboard) ? document.body.dataset.dashboard : 'overview';
   const container = $('#recent-table');
   $('.recent-card h2').textContent = {overview:'Recent days',acne:'Your skin check-ins',stomach:'Meals & stomach notes'}[mode];
-  container.innerHTML = state.filtered.slice(0,5).map(day => {
+  // Only days with something logged for this tab; never a list of "nothing" rows.
+  const rows = state.filtered.map(day => {
     const details = mode==='overview' ? day.sessions.map(s => `${sessionText(s)} · ${num(s.minutes)} min`).join(' / ') : mode==='acne' ? (day.skin?.notes||[]).map(n => n.text).filter(Boolean).join(' · ') : [...day.meals.map(m => m.text), ...day.pain_reports.map(r => r.text), ...day.life_notes.map(n => n.text)].filter(Boolean).join(' · ');
     const metric = mode==='overview' ? `${plural(day.habits_done, 'habit')} · ${totalActivity(day)} productive min` : mode==='acne' ? [day.acne !== null ? `Severity ${day.acne}/10` : '', day.acne_spots !== null ? plural(day.acne_spots, 'spot') : ''].filter(Boolean).join(' · ') || 'Skin not scored' : day.stomach_pain !== null ? `Discomfort ${day.stomach_pain}/10` : day.pain_reports.length ? 'Pain reported (no score)' : 'No pain logged';
-    return `<article class="tracker-entry"><div><strong>${shortDate(day.date)}</strong><span>${escapeHtml(metric)}</span></div><p>${escapeHtml(details||'Nothing logged for this tracker.')}</p></article>`;
-  }).join('') || '<div class="empty-state">Nothing logged in this range yet.</div>';
+    if (!details && /not scored|^0 habits/.test(metric)) return '';
+    return `<article class="tracker-entry"><div><strong>${shortDate(day.date)}</strong><span>${escapeHtml(metric)}</span></div>${details ? `<p>${escapeHtml(details)}</p>` : ''}</article>`;
+  }).filter(Boolean);
+  container.innerHTML = rows.slice(0, 5).join('') || '<div class="empty-state">Nothing logged in this range yet.</div>';
 }
 
 const moodText = m => [Array.isArray(m.feelings) ? m.feelings.join(', ') : m.feelings, isNum(m.severity) ? `${m.severity}/10` : '', m.cause ? `because ${m.cause}` : '', m.notes].filter(Boolean).join(' · ');
@@ -700,7 +733,7 @@ function renderJournal(query='') {
       totalActivity(day) ? `<span class="signal-badge">Active ${totalActivity(day)}m</span>` : '',
       day.water !== null ? `<span class="signal-badge">Water ${day.water}</span>` : '',
       dash && (isNum(dash.pay) || isNum(dash.net_profit)) ? `<span class="signal-badge">DoorDash ${isNum(dash.pay) ? `$${Number(dash.pay).toFixed(2)}` : ''}${isNum(dash.net_profit) ? ` · net $${Number(dash.net_profit).toFixed(2)}` : ''}</span>` : '',
-      day.shield ? '<span class="signal-badge good">🛡 Streak shield</span>' : ''
+      day.shield ? '<span class="signal-badge good" title="Rest day: a sick or recovery day that doesn’t break your streaks">🛌 Rest day · doesn’t break streaks</span>' : ''
     ].filter(Boolean).join('');
     return `<article class="journal-entry"><div class="journal-date"><strong>${Number(day.date.slice(8))}</strong><span>${isoLabel(day.date,{month:'short'})}</span></div><div class="journal-body"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(details)}</p>${lifeNotes || moods ? `<ul class="journal-notes">${moods}${lifeNotes}</ul>` : ''}<div class="journal-signals">${badges}</div></div><span class="trend-pill neutral">${plural(day.event_count, 'event')}</span></article>`;
   }).join('') : '<div class="empty-state">No journal days match your search.</div>';
@@ -733,8 +766,13 @@ function watchForUpdates() {
 }
 
 const PANELS = ['overview','homework','acne','stomach','journal','patterns','doordash'];
-const TITLES = { homework:'Your study lab', acne:'Your skin story', stomach:'Your gut journal', journal:'Your journal', patterns:'Your discoveries', doordash:'Your DoorDash shifts' };
-const DOC_TITLES = { overview:'Life', homework:'Study lab', acne:'Acne', stomach:'Stomach', journal:'Journal', patterns:'Discoveries', doordash:'DoorDash' };
+const TITLES = { homework:'Your study lab', acne:'Your skin story', stomach:'Your gut journal', journal:'Your journal', patterns:'Your patterns', doordash:'Your DoorDash shifts' };
+const DOC_TITLES = { overview:'Life', homework:'Study lab', acne:'Acne', stomach:'Stomach', journal:'Journal', patterns:'Patterns', doordash:'DoorDash' };
+// Patterns needs about two weeks of history; until then it stays out of the nav.
+function updatePatternsNav() {
+  const ready = state.days.length >= MIN_PATTERN_DAYS;
+  $$('[data-view="patterns"], [data-view-go="patterns"]').forEach(el => { el.hidden = !ready; });
+}
 function setTitle(name) {
   const h1 = $('.topbar h1');
   h1.childNodes[0].textContent = `${name === 'overview' ? greeting() : TITLES[name] || 'Soma'} `;
@@ -748,6 +786,14 @@ function showPanel(name) {
   document.body.dataset.dashboard = name;
   $$('[data-panel]').forEach(panel => { panel.hidden = panel.dataset.panel !== (dashboard ? 'overview' : name); });
   $$('.nav-item').forEach(item => { const on = item.dataset.view === name; item.classList.toggle('active', on); if (on) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current'); });
+  // Phone tab bar: Body covers Stomach + Acne, More covers Journal + Patterns.
+  if (name === 'acne' || name === 'stomach') state.bodyTab = name;
+  const tab = name === 'acne' || name === 'stomach' ? 'body' : name === 'journal' || name === 'patterns' ? 'more' : name;
+  $$('.tab-item').forEach(item => { const on = item.dataset.tab === tab; item.classList.toggle('active', on); if (on && item.tagName === 'A') item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current'); });
+  const bodyLink = $('.tab-item[data-tab="body"]'); if (bodyLink) bodyLink.href = `#${state.bodyTab}`;
+  $$('[data-body]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.body === name)));
+  $$('[data-view-go]').forEach(link => { if (link.dataset.viewGo === name) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current'); });
+  closeMoreMenu();
   setTitle(name);
   setPhotosVisible(name === 'acne');
   if (dashboard) {
@@ -761,12 +807,47 @@ function showPanel(name) {
 }
 let toastTimer; function showToast(message) { const toast = $('#toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2400); }
 
+function closeMoreMenu() {
+  const menu = $('#more-menu'), toggle = $('.tab-item[data-tab="more"]');
+  if (menu) menu.hidden = true;
+  toggle?.setAttribute('aria-expanded', 'false');
+}
+function go(name) { showPanel(name); history.replaceState(null, '', `#${name}`); }
+
+// ---------- Theme (dark by default; index.html sets it before first paint) ----------
+const THEME_COLORS = { dark:'#15121f', light:'#f7f2ff' };
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  $('meta[name="theme-color"]')?.setAttribute('content', THEME_COLORS[theme]);
+  const toggle = $('#theme-toggle');
+  if (toggle) { toggle.setAttribute('aria-pressed', String(theme === 'dark')); toggle.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'; }
+}
+function wireTheme() {
+  applyTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
+  $('#theme-toggle')?.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try { localStorage.setItem('soma-theme', next); } catch { /* storage blocked: still switches for this visit */ }
+  });
+}
+
 function wireInteractions() {
+  wireTheme();
+  $$('.tab-item[href]').forEach(item => item.addEventListener('click', event => { event.preventDefault(); go(item.dataset.tab === 'body' ? state.bodyTab : item.dataset.tab); }));
+  $('.tab-item[data-tab="more"]')?.addEventListener('click', event => {
+    const menu = $('#more-menu'); const open = menu.hidden;
+    menu.hidden = !open; event.currentTarget.setAttribute('aria-expanded', String(open));
+    if (open) menu.querySelector('a:not([hidden])')?.focus();
+  });
+  $$('[data-view-go]').forEach(link => link.addEventListener('click', event => { event.preventDefault(); go(link.dataset.viewGo); }));
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('#more-menu')?.hidden) { closeMoreMenu(); $('.tab-item[data-tab="more"]')?.focus(); } });
+  document.addEventListener('click', event => { if (!event.target.closest('#more-menu, .tab-item[data-tab="more"]')) closeMoreMenu(); });
+  $$('[data-body]').forEach(button => button.addEventListener('click', () => go(button.dataset.body)));
   $('#today-label').textContent = phoenixLabel({ weekday:'long', month:'long', day:'numeric' });
   $$('.nav-item').forEach(item => item.addEventListener('click', event => { event.preventDefault(); showPanel(item.dataset.view); history.replaceState(null, '', `#${item.dataset.view}`); }));
   $$('[data-view-link]').forEach(button => button.addEventListener('click', () => showPanel(button.dataset.viewLink)));
   $('.mobile-menu').addEventListener('click', event => { const open = $('.sidebar').classList.toggle('open'); event.currentTarget.setAttribute('aria-expanded', String(open)); });
-  $('#range-select').addEventListener('change', applyRange); $('#refresh-dashboard').addEventListener('click', () => loadData({announce:true})); $('#refresh-data').addEventListener('click', () => loadData({announce:true})); $('#journal-search').addEventListener('input', event => renderJournal(event.target.value));
+  $('#range-select').addEventListener('change', applyRange); $('#refresh-dashboard').addEventListener('click', async event => { const button = event.currentTarget; button.disabled = true; try { await loadData({announce:true}); } finally { button.disabled = false; } }); $('#refresh-data').addEventListener('click', () => loadData({announce:true})); $('#journal-search').addEventListener('input', event => renderJournal(event.target.value));
   $$('.legend-item').forEach(button => button.addEventListener('click', () => { const key = button.dataset.series; state.series[key] = !state.series[key]; button.classList.toggle('active', state.series[key]); renderSignalsChart(); }));
   $('#blueprint-toggle-contrast')?.addEventListener('click', () => {
     const panel = $('#blueprint-contrast-panel');

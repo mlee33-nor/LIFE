@@ -1,34 +1,34 @@
 /* A quieter, more readable daily replay. */
 .time-columns{grid-template-columns:minmax(0,1fr) 290px;align-items:start;gap:22px}
-.time-columns>.time-panel:first-child{background:#fdfbff;border:1px solid #e6dfef;padding:25px;border-radius:22px}
+.time-columns>.time-panel:first-child{background:var(--bg-fdfbff);border:1px solid var(--ln-e6dfef);padding:25px;border-radius:22px}
 .replay-heading{display:flex;justify-content:space-between;align-items:center;gap:15px}
 
-.replay-heading h3{font-size:27px!important;letter-spacing:-1px;margin:7px 0!important;color:#342b49}
-.replay-heading p{font-size:12px;color:#625870;margin:0}
-.replay-count{font-size:11px;white-space:nowrap;background:#eee7f7;color:#4f4065;padding:7px 10px;border-radius:20px}
-.replay-legend{margin:22px 0 16px;gap:8px 15px}.replay-legend span{font-size:11px;color:#5d5170}.replay-legend i{border-radius:50%;width:10px;height:10px;box-shadow:0 0 0 1.5px #fff,0 0 0 2.5px rgba(41,35,61,.18)}
-.replay-chart{padding:15px;background:#f3eff8;border-radius:15px;border:1px solid #ebe4f2}
-.replay-chart .time-axis{margin:0;color:#5d5170;font-size:11px}
-.replay-strip{margin-top:7px;border-radius:7px;background:repeating-linear-gradient(90deg,transparent 0%,transparent 24.8%,#e3dbea 24.8%,#e3dbea 25%);overflow:hidden}
-.replay-segment{height:29px;border:0;border-radius:5px;box-shadow:inset 0 1px 0 #ffffff35;transition:filter .15s,transform .15s}
+.replay-heading h3{font-size:27px!important;letter-spacing:-1px;margin:7px 0!important;color:var(--fg-342b49)}
+.replay-heading p{font-size:12px;color:var(--fg-625870);margin:0}
+.replay-count{font-size:11px;white-space:nowrap;background:var(--bg-eee7f7);color:var(--fg-4f4065);padding:7px 10px;border-radius:20px}
+.replay-legend{margin:22px 0 16px;gap:8px 15px}.replay-legend span{font-size:11px;color:var(--fg-5d5170)}.replay-legend i{border-radius:50%;width:10px;height:10px;box-shadow:0 0 0 1.5px var(--sh-ffffff),0 0 0 2.5px var(--sh-29233d2e)}
+.replay-chart{padding:15px;background:var(--bg-f3eff8);border-radius:15px;border:1px solid var(--ln-ebe4f2)}
+.replay-chart .time-axis{margin:0;color:var(--fg-5d5170);font-size:11px}
+.replay-strip{margin-top:7px;border-radius:7px;background:repeating-linear-gradient(90deg,transparent 0%,transparent 24.8%,var(--bg-e3dbea) 24.8%,var(--bg-e3dbea) 25%);overflow:hidden}
+.replay-segment{height:29px;border:0;border-radius:5px;box-shadow:inset 0 1px 0 var(--sh-ffffff35);transition:filter .15s,transform .15s}
 .replay-segment:hover{filter:brightness(1.12);transform:translateY(-2px)}
 .replay-agenda{gap:0;margin-top:25px}.replay-event{display:grid;grid-template-columns:75px 22px minmax(0,1fr);gap:9px;min-width:0}
-.replay-clock{padding-top:16px;text-align:right}.replay-clock strong{font-size:11px;font-weight:600;color:#4f4361}.replay-clock small{display:block;font-size:10px;color:#625870;margin-top:6px}
-.replay-spine{display:flex;justify-content:center;position:relative}.replay-spine::before{content:'';position:absolute;top:0;bottom:0;width:1px;background:#e4dce9}.replay-spine i{width:9px;height:9px;background:var(--event-color);border:3px solid #fdfbff;box-sizing:content-box;border-radius:50%;position:relative;margin-top:17px}.replay-event:first-child .replay-spine::before{top:22px}.replay-event:last-child .replay-spine::before{bottom:calc(100% - 24px)}
-.replay-event-body{margin-bottom:11px;padding:15px 17px;background:white;border:1px solid #ece5f1;border-left:5px solid var(--event-color);border-radius:12px;box-shadow:0 3px 8px #3a224a03}
-.replay-event-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.replay-event-title strong{font-size:13px!important;line-height:1.5;color:#4a3e5b;overflow-wrap:anywhere}.replay-event-title span{font-size:11px;white-space:nowrap;background:#f3eff8;border-radius:7px;padding:5px 8px;color:#55456a}
-.replay-event-body p{font-size:11px;color:#625870;margin:6px 0 0}.calculated-label{display:block;color:#625870;font-size:10px;margin-top:7px}
-.time-caption{color:#625870!important;line-height:1.7}
+.replay-clock{padding-top:16px;text-align:right}.replay-clock strong{font-size:11px;font-weight:600;color:var(--fg-4f4361)}.replay-clock small{display:block;font-size:10px;color:var(--fg-625870);margin-top:6px}
+.replay-spine{display:flex;justify-content:center;position:relative}.replay-spine::before{content:'';position:absolute;top:0;bottom:0;width:1px;background:var(--bg-e4dce9)}.replay-spine i{width:9px;height:9px;background:var(--event-color);border:3px solid var(--ln-fdfbff);box-sizing:content-box;border-radius:50%;position:relative;margin-top:17px}.replay-event:first-child .replay-spine::before{top:22px}.replay-event:last-child .replay-spine::before{bottom:calc(100% - 24px)}
+.replay-event-body{margin-bottom:11px;padding:15px 17px;background:var(--bg-ffffff);border:1px solid var(--ln-ece5f1);border-left:5px solid var(--event-color);border-radius:12px;box-shadow:0 3px 8px var(--sh-3a224a03)}
+.replay-event-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.replay-event-title strong{font-size:13px!important;line-height:1.5;color:var(--fg-4a3e5b);overflow-wrap:anywhere}.replay-event-title span{font-size:11px;white-space:nowrap;background:var(--bg-f3eff8);border-radius:7px;padding:5px 8px;color:var(--fg-55456a)}
+.replay-event-body p{font-size:11px;color:var(--fg-625870);margin:6px 0 0}.calculated-label{display:block;color:var(--fg-625870);font-size:10px;margin-top:7px}
+.time-caption{color:var(--fg-625870)!important;line-height:1.7}
 @media(max-width:1200px){.time-columns{grid-template-columns:minmax(0,1fr)}.time-columns>.time-panel:last-child{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}.time-columns>.time-panel:last-child h3{grid-column:1/-1}}
 @media(max-width:580px){.time-columns>.time-panel:first-child{padding:15px}.replay-heading h3{font-size:23px!important}.replay-event{grid-template-columns:57px 15px minmax(0,1fr);gap:5px}.replay-clock strong{font-size:10px}.replay-event-body{padding:12px 10px}.replay-event-title{align-items:start;flex-direction:column;gap:5px}.replay-chart{padding:10px}.time-columns>.time-panel:last-child{display:block}}
-.replay-segment.ghost{background:#e3dbea;opacity:0.4;z-index:0;box-shadow:none;border:1px dashed #d0c8da;}
+.replay-segment.ghost{background:var(--bg-e3dbea);opacity:0.4;z-index:0;box-shadow:none;border:1px dashed var(--ln-d0c8da);}
 
 /* Wake / sleep / MB moments on the day timeline */
-.replay-moment{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed #b4690e;z-index:2;pointer-events:auto}
-.replay-moment b{position:absolute;top:2px;left:-9px;width:18px;height:18px;border-radius:50%;background:#fff3d6;border:1.5px solid #b4690e;font-size:11px;line-height:15px;text-align:center;color:#7a4300}
-.replay-moment.bed{border-left-color:#4b3fa8}.replay-moment.bed b{background:#e6e2ff;border-color:#4b3fa8;color:#2e2470}
-.replay-moment.mb{border-left:2px dotted #b3261e}.replay-moment.mb b{top:auto;bottom:2px;background:#ffd7d2;border-color:#b3261e;color:#7d1a12;font-size:14px;line-height:13px}
+.replay-moment{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--ln-b4690e);z-index:2;pointer-events:auto}
+.replay-moment b{position:absolute;top:2px;left:-9px;width:18px;height:18px;border-radius:50%;background:var(--bg-fff3d6);border:1.5px solid var(--ln-b4690e);font-size:11px;line-height:15px;text-align:center;color:var(--fg-7a4300)}
+.replay-moment.bed{border-left-color:var(--ln-4b3fa8)}.replay-moment.bed b{background:var(--bg-e6e2ff);border-color:var(--ln-4b3fa8);color:var(--fg-2e2470)}
+.replay-moment.mb{border-left:2px dotted var(--ln-b3261e)}.replay-moment.mb b{top:auto;bottom:2px;background:var(--bg-ffd7d2);border-color:var(--ln-b3261e);color:var(--fg-7d1a12);font-size:14px;line-height:13px}
 .moment-key b{display:inline-block;margin-right:2px;font-size:11px}
-.replay-event.moment .moment-body{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fff8e8;border:1px dashed #e0b26a;border-radius:10px;font-size:13px}
-.replay-event.moment.bed .moment-body{background:#f1efff;border-color:#a99ee8}
-.replay-event.moment.mb .moment-body{background:#fff0ee;border-color:#e3a39c}
+.replay-event.moment .moment-body{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-fff8e8);border:1px dashed var(--ln-e0b26a);border-radius:10px;font-size:13px}
+.replay-event.moment.bed .moment-body{background:var(--bg-f1efff);border-color:var(--ln-a99ee8)}
+.replay-event.moment.mb .moment-body{background:var(--bg-fff0ee);border-color:var(--ln-e3a39c)}

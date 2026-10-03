@@ -148,7 +148,7 @@ export function stampFor(value) {
 // "Math practice / review" -> "math", "" -> "general".
 export function subjectOf(label) {
   const s = String(label ?? '').toLowerCase()
-    .replace(/\b(hmwk|homework|hw|practice|review|session|study|studying)\b/g, ' ')
+    .replace(/\b(hmwk|homework|hw|practice|review|session|study|studying|daily|goal|target|minutes?|per|day)\b/g, ' ')
     .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
   return s || 'general';
 }
@@ -184,6 +184,19 @@ function skinRoutine(label) {
 function noteField(notes, name) {
   const m = String(notes ?? '').match(new RegExp(`${name}:\\s*([^.]+(?:\\.[0-9][^.]*)*)`, 'i'));
   return m ? m[1].trim() : null;
+}
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+// "for exam prep (exam Oct 13)" -> { word: 'exam', date: '2026-10-13' }: the next
+// such date on or after the row's date.
+function examFromText(text, rowDate) {
+  const m = String(text ?? '').match(/\b(exam|midterm|final|test)\b[^.;]{0,20}?\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})\b/i);
+  const base = normDate(rowDate);
+  if (!m || !base) return null;
+  let year = Number(base.slice(0, 4));
+  let date = `${year}-${pad(MONTHS.indexOf(m[2].toLowerCase()) + 1)}-${pad(m[3])}`;
+  if (date < base) date = `${++year}${date.slice(4)}`;
+  return { word: m[1].toLowerCase().replace(/^\w/, (c) => c.toUpperCase()), date };
 }
 
 // row -> [{ key, tracker, at, day, data }]
@@ -257,8 +270,10 @@ function mapLifeRow(row, at, day, ctx) {
       target_minutes: num(row.value) ?? num(row.minutes_reported), standing: event === 'daily_target' || /day/i.test(row.unit),
       text: row.notes || null,
     });
-  } else if (category === 'emotion') {
-    const feelings = String(row.value || label).split(/\s*(?:;|,|\band\b)\s*/).map((f) => f.trim().toLowerCase()).filter(Boolean);
+    const exam = examFromText(row.notes, row.date);
+    if (exam) out.push({ key: `${row.row_id}#exam`, tracker: 'life', at, day, data: { kind: 'exam', label: `${label ? subjectOf(label).replace(/^\w/, (c) => c.toUpperCase()) : 'Study'} ${exam.word}`, subject: label ? subjectOf(label) : null, date: exam.date } });
+  } else if (category === 'emotion' || category === 'mood') {
+    const feelings = String(row.value || (/^(emotion|mood)$/i.test(label) ? '' : label)).split(/\s*(?:;|,|\band\b)\s*/).map((f) => f.trim().toLowerCase()).filter(Boolean);
     add('', { kind: 'mood', text: row.value || label, feelings, severity: num(row.severity_0_10), cause: row.cause || null, note: row.notes || null });
   } else if (category === 'exam' || category === 'deadline' || event === 'exam') {
     // An upcoming exam: value (or end_at) = its date, label = its name.

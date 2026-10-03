@@ -4,8 +4,6 @@ body[data-dashboard="acne"] .todo-card, body[data-dashboard="stomach"] .todo-car
 
 .todo-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .todo-head h2 { margin: 2px 0 0; }
-.todo-nav { display: flex; gap: 6px; }
-.todo-nav button { width: 32px; height: 32px; border: 1px solid var(--line, #ddd); border-radius: 9px; background: var(--card, #fff); color: var(--ink, #222); font: inherit; cursor: pointer; }
 
 .todo-progress { height: 8px; margin-top: 14px; overflow: hidden; border-radius: 99px; background: var(--line, #e6e3db); }
 .todo-progress span { display: block; height: 100%; border-radius: 99px; background: var(--sage, #4a7c59); transition: width .3s; }
@@ -13,24 +11,24 @@ body[data-dashboard="acne"] .todo-card, body[data-dashboard="stomach"] .todo-car
 
 .todo-list { display: grid; gap: 6px; margin: 14px 0 0; padding: 0; list-style: none; }
 .todo-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line, #e6e3db); border-radius: 12px; background: var(--card, #fff); }
-.todo-item.high { border-color: #e8a13a; }
+.todo-item.high { border-color: var(--ln-e8a13a); }
 .todo-check { display: grid; flex: 0 0 auto; width: 20px; height: 20px; place-items: center; border: 2px solid var(--line, #ccc); border-radius: 6px; font-size: 13px; font-weight: 700; }
-.todo-item.done .todo-check { border-color: var(--sage, #4a7c59); background: var(--sage, #4a7c59); color: #fff; }
+.todo-item.done .todo-check { border-color: var(--sage, #4a7c59); background: var(--sage, #4a7c59); color: var(--fg-ffffff); }
 .todo-item.done .todo-text strong, .todo-item.skipped .todo-text strong { color: var(--muted, #8a8a8a); text-decoration: line-through; }
 .todo-text { display: grid; flex: 1; gap: 2px; font-size: 14px; }
 .todo-text small { color: var(--muted, #6b6b6b); font-size: 12px; }
-.todo-flag { flex: 0 0 auto; padding: 2px 8px; border-radius: 99px; background: #fbeed6; color: #8a5a00; font-size: 11px; font-weight: 600; }
+.todo-flag { flex: 0 0 auto; padding: 2px 8px; border-radius: 99px; background: var(--bg-fbeed6); color: var(--fg-8a5a00); font-size: 11px; font-weight: 600; }
 .todo-empty { margin: 12px 0 0; color: var(--muted, #6b6b6b); font-size: 14px; }
 .todo-carried { margin-top: 14px; }
 .todo-carried summary { cursor: pointer; font-size: 13px; color: var(--muted, #6b6b6b); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* Editable (unlocked) state */
-button.todo-check { padding: 0; background: var(--card, #fff); color: #fff; cursor: pointer; min-width: 24px; min-height: 24px; }
+button.todo-check { padding: 0; background: var(--card, #fff); color: var(--fg-ffffff); cursor: pointer; min-width: 24px; min-height: 24px; }
 button.todo-check:hover { border-color: var(--sage, #4a7c59); }
 button.todo-check:focus-visible { outline: 3px solid var(--sage, #4a7c59); outline-offset: 2px; }
 .todo-add { display: flex; gap: 6px; margin-top: 12px; }
 .todo-add input { flex: 1; min-width: 0; padding: 9px 11px; border: 1px solid var(--line, #ddd); border-radius: 10px; background: var(--card, #fff); color: var(--ink, #222); font: inherit; }
 .todo-add select, .todo-add button { padding: 9px 11px; border: 1px solid var(--line, #ddd); border-radius: 10px; background: var(--card, #fff); color: var(--ink, #222); font: inherit; }
 .todo-add button { border-color: transparent; background: var(--ink, #222); color: var(--card, #fff); cursor: pointer; }
-.todo-error { min-height: 0; margin: 6px 0 0; color: #b3261e; font-size: 12px; }
+.todo-error { min-height: 0; margin: 6px 0 0; color: var(--fg-b3261e); font-size: 12px; }

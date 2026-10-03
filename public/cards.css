@@ -1,0 +1,169 @@
+/* Week strip, merged "This week" card, Stomach headline, skincare routine,
+   sleep stretches, header status/theme toggle and the Body switch.
+   Loaded after extras.css; colours come from theme.css tokens. */
+
+/* ---------- Where things show ---------- */
+body:not([data-dashboard="overview"]) .week-strip { display: none; }
+.body-switch { display: none; }
+body[data-dashboard="acne"] .body-switch, body[data-dashboard="stomach"] .body-switch { display: inline-flex; }
+body[data-dashboard="overview"] .metric-grid, body[data-dashboard="overview"] .metric-compare-note,
+body[data-dashboard="stomach"] .metric-grid, body[data-dashboard="stomach"] .metric-compare-note { display: none; }
+.stomach-headline, .skincare-card { display: none; }
+body[data-dashboard="stomach"] .stomach-headline, body[data-dashboard="acne"] .skincare-card { display: block; }
+
+/* ---------- Sidebar: Body group ---------- */
+.nav-group { display: grid; gap: 4px; padding: 4px 0 2px; }
+.nav-group-label { padding: 2px 12px 0; color: var(--ink-soft); font-size: 10.5px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
+.nav-group .nav-item { margin-left: 10px; }
+.tab-bar { display: none; }
+@media (min-width: 801px) and (max-width: 1100px) {
+  .nav-group-label { padding: 0; text-align: center; font-size: 9.5px; }
+  .nav-group .nav-item { margin-left: 0; }
+}
+
+/* ---------- Header: status, theme toggle ---------- */
+.status-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; margin-right: 5px; }
+.status-stack .sync-state { margin-right: 0; }
+.motion-heard { color: var(--ink-soft); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.motion-heard.quiet { padding: 2px 8px; border-radius: 99px; background: var(--amber-bg); color: var(--amber-ink); }
+.icon-toggle { display: grid; width: 43px; height: 43px; flex: 0 0 auto; place-items: center; border: 1.5px solid var(--edge); border-radius: 11px; background: var(--card); color: var(--ink); }
+.icon-toggle svg { width: 19px; height: 19px; }
+.theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+:root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+.primary-button:disabled { cursor: progress; opacity: .75; }
+@media (max-width: 800px) { .status-stack { align-items: flex-start; } }
+
+/* ---------- Body switch (Stomach | Acne) ---------- */
+.body-switch { gap: 4px; margin: 0 0 16px; padding: 4px; border: 2px solid var(--edge); border-radius: 14px; background: var(--card); box-shadow: 3px 3px 0 var(--shadow-soft); }
+.body-switch button { min-width: 108px; min-height: 40px; padding: 0 18px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-soft); font-size: 14px; font-weight: 800; }
+.body-switch button[aria-pressed="true"] { background: var(--lime); color: var(--on-lime); box-shadow: inset 0 0 0 1.5px var(--edge); }
+@media (max-width: 580px) { .body-switch { display: none; width: 100%; } body[data-dashboard="acne"] .body-switch, body[data-dashboard="stomach"] .body-switch { display: flex; } .body-switch button { flex: 1; min-width: 0; min-height: 44px; } }
+
+/* ---------- Week strip ---------- */
+.week-strip { margin-bottom: 18px; padding: 14px 16px 12px; }
+.week-head { display: flex; align-items: center; gap: 10px; }
+.week-shift { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border: 1.5px solid var(--edge); border-radius: 11px; background: var(--card); color: var(--ink); font-size: 22px; line-height: 1; }
+.week-range { flex: 1; min-width: 0; margin: 0; text-align: center; }
+.week-range strong, .week-range span { display: block; }
+.week-range strong { font-family: 'Space Grotesk', sans-serif; font-size: 16px; }
+.week-range span { color: var(--ink-soft); font-size: 12px; font-weight: 600; }
+.week-today { min-height: 36px; padding: 0 12px; border: 1.5px solid var(--edge); border-radius: 99px; background: var(--sage-soft); color: var(--ink); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.week-day { display: grid; min-width: 0; justify-items: center; gap: 4px; padding: 7px 2px 5px; border: 2px solid transparent; border-radius: 16px; background: transparent; color: var(--ink); transition: transform .15s, box-shadow .15s; }
+.week-day:hover:not(:disabled) { background: var(--sage-soft); }
+.wk-letter { color: var(--ink-soft); font-size: 11px; font-weight: 800; }
+.wk-circle { display: grid; width: 40px; height: 40px; place-items: center; border: 1.5px solid var(--line); border-radius: 50%; background: var(--wk-0); font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700; }
+.week-day.level-1 .wk-circle { border-color: transparent; background: var(--wk-1); }
+.week-day.level-2 .wk-circle { border-color: transparent; background: var(--wk-2); }
+.week-day.level-3 .wk-circle { border-color: transparent; background: var(--wk-3); color: var(--wk-ink-strong); }
+.week-day.level-4 .wk-circle { border-color: transparent; background: var(--wk-4); color: var(--wk-ink-strong); }
+.week-day.is-today .wk-circle { outline: 2.5px solid var(--accent-ink); outline-offset: 2px; }
+.week-day.is-selected { border-color: var(--edge); background: var(--lime); box-shadow: 2px 3px 0 var(--edge-shadow); transform: translateY(-3px); }
+.week-day.is-selected .wk-letter { color: var(--on-lime); }
+.week-day.is-future { cursor: default; opacity: .4; }
+.wk-marks { display: flex; height: 12px; align-items: center; justify-content: center; gap: 4px; }
+.wk-pain, .week-legend .wk-pain { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pain-mark); }
+.wk-mb, .week-legend .wk-mb { display: inline-block; width: 7px; height: 7px; border-radius: 1px; background: var(--mb-mark); transform: rotate(45deg); }
+.wk-rest { font-size: 11px; font-style: normal; line-height: 1; }
+.week-legend { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 14px; margin: 8px 0 0; color: var(--ink-soft); font-size: 11.5px; }
+.week-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.wk-scale { display: inline-flex; gap: 2px; margin-right: -9px; }
+.wk-scale i { width: 10px; height: 10px; border-radius: 50%; }
+.wk-scale .level-1 { background: var(--wk-1); } .wk-scale .level-2 { background: var(--wk-2); } .wk-scale .level-3 { background: var(--wk-3); } .wk-scale .level-4 { background: var(--wk-4); }
+@media (max-width: 580px) {
+  .week-strip { padding: 12px 10px 10px; }
+  .week-days { gap: 3px; }
+  .wk-circle { width: 34px; height: 34px; font-size: 14px; }
+  .week-day { padding: 6px 0 4px; border-radius: 13px; }
+  .week-today { min-height: 44px; }
+  .week-shift { width: 44px; height: 44px; }
+  .week-head { flex-wrap: wrap; }
+  .week-today { order: 4; flex: 1 1 100%; }
+}
+
+/* ---------- Day timeline ---------- */
+.time-day { margin: 0; color: var(--ink-soft); font-size: 13px; font-weight: 700; }
+/* Moment rows (Woke up / Went to sleep / MB / Awake): time centred on its box. */
+.replay-event.moment .replay-clock, .replay-event.awake .replay-clock { align-self: center; margin-bottom: 11px; padding-top: 0; }
+.replay-event.moment .replay-spine, .replay-event.awake .replay-spine { align-items: center; padding-bottom: 11px; }
+.replay-event.moment .replay-spine i, .replay-event.awake .replay-spine i { margin-top: 0; }
+.replay-event.sleep { --event-color: var(--sleep); }
+.replay-event.sleep.nap { --event-color: var(--sleep-nap); }
+.replay-event.sleep .replay-event-title strong span { color: var(--sleep); }
+.replay-segment.sleep { z-index: 1; background: var(--sleep); }
+.replay-segment.sleep.nap { background: var(--sleep-nap); }
+.sleep-key { background: var(--sleep); }
+.replay-event.awake .replay-spine i { background: var(--card); border-color: var(--line); }
+.awake-body { margin-bottom: 11px; padding: 6px 12px; border: 1px dashed var(--line); border-radius: 10px; color: var(--ink-soft); font-size: 12px; }
+.slept-line { margin: 0 0 6px; padding: 7px 10px; border-radius: 10px; background: var(--surface-2); color: var(--ink); font-size: 12.5px; font-weight: 700; }
+.slept-line span { color: var(--sleep); }
+.sleep-row, .sleep-axis { grid-template-columns: 58px minmax(0, 1fr) minmax(40px, auto); }
+.sleep-row b small { color: var(--ink-soft); font-size: 11px; font-weight: 600; }
+.sleep-track i.nap { opacity: .55; }
+
+/* ---------- To-dos: slim empty line ---------- */
+.todo-card.is-slim { padding: 10px 16px; }
+.todo-slim { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ink-soft); font-size: 13.5px; font-weight: 600; }
+.todo-slim span { color: var(--ink); font-size: 15px; }
+
+/* ---------- This week (merged review + weekly report) ---------- */
+.week-summary { margin: 12px 0 0; font-size: 14.5px; line-height: 1.55; }
+.week-report { margin-top: 8px; }
+.week-report > summary { cursor: pointer; width: max-content; color: var(--accent-ink); font-size: 12.5px; font-weight: 700; }
+.week-report .review-report { margin-top: 8px; }
+.week-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.week-stat { display: grid; min-width: 0; align-content: start; gap: 3px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+.week-stat > span { color: var(--ink-soft); font-size: 11.5px; font-weight: 700; }
+.week-stat > strong { font-family: 'Space Grotesk', sans-serif; font-size: 21px; letter-spacing: -.5px; line-height: 1.15; }
+.week-stat > strong small { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+.week-stat .review-delta { padding: 2px 7px; font-size: 11px; }
+@media (max-width: 900px) { .week-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .week-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .week-stat:last-child { grid-column: 1 / -1; } }
+
+/* ---------- Stomach headline ---------- */
+.stomach-headline .extra-head h2 { font-size: 26px; }
+.stomach-stats { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1fr); gap: 10px; }
+.stomach-stats > div { display: grid; min-width: 0; align-content: start; gap: 3px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+.stomach-stats > div:first-child { background: var(--bg-e0efff); }
+.stomach-stats > div.wide { background: var(--bg-ffe1d9); }
+.stomach-stats span { color: var(--ink-soft); font-size: 12px; font-weight: 700; }
+.stomach-stats strong { font-family: 'Space Grotesk', sans-serif; font-size: 20px; line-height: 1.2; }
+.stomach-stats strong small { color: var(--ink-soft); font-size: 13px; }
+.stomach-stats small { color: var(--ink-soft); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+@media (max-width: 700px) { .stomach-stats { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .stomach-stats > div.wide { grid-column: 1 / -1; grid-row: 1; } }
+
+/* ---------- Body signals chart: unscored pain row ---------- */
+.chart-wrap .grid-line.dashed { stroke-dasharray: 3 4; }
+.chart-wrap .chart-point .point.hollow, :root[data-theme="dark"] .chart-wrap .chart-point .point.hollow { fill: var(--card); stroke: var(--chart-pain); stroke-width: 2.5; }
+.chart-point:hover .point.hollow, .chart-point:focus .point.hollow { stroke: var(--ink); }
+.chart-note { margin: 6px 0 0; color: var(--ink-soft); font-size: 12px; }
+.chart-tooltip { background: var(--card); color: var(--ink); }
+
+/* ---------- Skincare routine (Acne) ---------- */
+.skin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.skin-stats > div { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.skin-stats span { color: var(--ink-soft); font-size: 12px; font-weight: 700; }
+.skin-stats strong { font-family: 'Space Grotesk', sans-serif; font-size: 22px; }
+.skin-stats strong small { color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+.skin-stats > div > small { color: var(--ink-soft); font-size: 12px; }
+.skin-grid-wrap { overflow-x: auto; }
+.skin-grid { width: 100%; border-collapse: separate; border-spacing: 3px; table-layout: fixed; }
+.skin-grid th { color: var(--ink-soft); font-size: 10.5px; font-weight: 700; line-height: 1.2; text-align: center; }
+.skin-grid thead th:first-child, .skin-grid tbody th { width: 76px; }
+.skin-grid tbody th { padding-right: 4px; color: var(--ink); font-size: 12px; text-align: left; white-space: nowrap; }
+.skin-grid th.is-today { color: var(--accent-ink); }
+.skin-grid td { padding: 0; text-align: center; }
+.skin-cell { display: inline-grid; width: 100%; max-width: 28px; aspect-ratio: 1; min-width: 14px; place-items: center; border: 1.5px solid var(--line); border-radius: 7px; font-size: 12px; font-style: normal; font-weight: 800; line-height: 1; }
+.skin-cell.done { border-color: transparent; background: var(--skin-done, #169436); color: #fff; }
+.skin-cell.skipped { border-color: var(--skin-skip-line, #c2410c); background: var(--skin-skip, #ffe4d2); color: var(--skin-skip-ink, #9a3412); }
+.skin-grid td.is-today .skin-cell { outline: 2px solid var(--accent-ink); outline-offset: 1px; }
+.skin-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0; color: var(--ink-soft); font-size: 12px; }
+.skin-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.skin-legend .skin-cell { width: 16px; min-width: 16px; font-size: 10px; }
+:root[data-theme="dark"] .skin-cell.done { --skin-done: #2fb457; color: #08140c; }
+:root[data-theme="dark"] .skin-cell.skipped { --skin-skip: #3d2213; --skin-skip-line: #f08a4b; --skin-skip-ink: #ffb68a; }
+@media (max-width: 580px) { .skin-grid { border-spacing: 2px; } .skin-grid thead th:first-child, .skin-grid tbody th { width: 58px; } .skin-grid tbody th { font-size: 11px; } .skin-grid th { font-size: 9.5px; } .skin-cell { border-radius: 5px; font-size: 10px; } }
+
+/* Nav labels at >= 4.5:1 on the lilac sidebar (tab bar: mobile.css). */
+.nav-item, .nav-group-label { color: var(--nav-ink); }
