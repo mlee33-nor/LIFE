@@ -45,7 +45,12 @@ row must also be in All events. To keep the numbers right:
 8. **Exams:** one row per exam: `category=exam`, `label` = its name ("MAT 213
    Midterm"), `value` = its date (YYYY-MM-DD), optional `unit` = subject. Set
    `status=cancelled` if it's called off. The dashboard counts down to it.
-9. **Check your work:** `GET /api/sync/issues` lists rows the dashboard couldn't
+9. **Income (RSA, eBay, Upwork):** `tracker=Money`, `category=income`, `label` =
+   the job (RSA / eBay / Upwork), `value` = dollars. For a month's total use
+   `event=monthly` (the month = the row's `date`, or put `YYYY-MM` in `unit`);
+   for one payment or sale use `event=payment` / `sale`. eBay amounts are
+   profit. A month total replaces that job's single payments for the month.
+10. **Check your work:** `GET /api/sync/issues` lists rows the dashboard couldn't
    read (`skipped`, with the reason) and sessions that were started but never
    ended (`unclosed_sessions`). Fix those rows in the sheet.
 
