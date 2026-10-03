@@ -10,7 +10,7 @@
 // next open while online and the HTML never runs against stale scripts.
 // Bump VERSION to force old caches to be dropped.
 
-const VERSION = 'v9';
+const VERSION = 'v10';
 const SHELL_CACHE = `soma-shell-${VERSION}`;
 const FONT_CACHE = `soma-fonts-${VERSION}`;
 const NETWORK_TIMEOUT_MS = 3500;

@@ -198,6 +198,12 @@ export function interpret(events, { now = Date.now() } = {}) {
     // The sheet's credited day (data.day) wins over the clock time, e.g.
     // 12:10 AM skincare counted toward Friday.
     const dayOfEvent = (ev) => (isDay(ev.data?.day) ? ev.data.day : localDate(ev.at));
+    // Side-job income is totalled per month in money.js; it doesn't make a day 'logged'.
+    if (data.kind === 'income' && num(data.amount) !== null) {
+      const period = /^\d{4}-\d{2}$/.test(data.period ?? '') ? data.period : null;
+      incomes.push({ id: String(data.sheet_row_id ?? e.id), source: data.job ?? (['sheet', 'form', 'dashboard'].includes(data.source) ? null : data.source ?? null), amount: num(data.amount), date: dayOfEvent(e), period, basis: data.basis ?? null, note: data.note ?? null });
+      continue;
+    }
     const d = day(dayOfEvent(e));
     d.event_count++;
 
@@ -298,10 +304,6 @@ export function interpret(events, { now = Date.now() } = {}) {
         ? data.feelings
         : String(data.text ?? data.mood ?? '').split(/\s*(?:;|,|\band\b)\s*/).map((f) => f.trim().toLowerCase()).filter(Boolean);
       d.moods.push({ at: localIso(e.at), feelings, severity: num(data.severity), cause: data.cause ?? null, notes: data.note ?? data.notes ?? null });
-    } else if (data.kind === 'income' && num(data.amount) !== null) {
-      // Side-job income; totalled per month in money.js.
-      const period = /^\d{4}-\d{2}$/.test(data.period ?? '') ? data.period : null;
-      incomes.push({ id: String(data.sheet_row_id ?? e.id), source: data.job ?? (['sheet', 'form', 'dashboard'].includes(data.source) ? null : data.source ?? null), amount: num(data.amount), date: d.date, period, basis: data.basis ?? null, note: data.note ?? null });
     } else if (e.tracker === 'life' && data.kind === 'exam') {
       const id = String(data.sheet_row_id ?? data.label ?? e.id);
       if (/cancel|done|past/i.test(data.status ?? '')) exams.delete(id);
@@ -398,6 +400,13 @@ export function interpret(events, { now = Date.now() } = {}) {
     });
     d.habits_done = Object.keys(d.habits).length;
     // The night: total of its stretches, first bedtime, final wake-up.
+    // A stretch that starts more than 90 min after the previous one ended is a
+    // nap (back to bed at 10 after getting up at 8), not part of the night.
+    let prevEnd = null;
+    for (const x of d.sleep_segments) {
+      if (!x.nap && prevEnd !== null && x.start && Date.parse(x.start) - prevEnd > 90 * 60000) x.nap = true;
+      if (!x.nap) prevEnd = Date.parse(x.end);
+    }
     const night = d.sleep_segments.filter((x) => !x.nap);
     if (night.length) {
       d.sleep_hours = round2(night.reduce((sum, x) => sum + x.minutes, 0) / 60);

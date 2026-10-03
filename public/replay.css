@@ -32,3 +32,14 @@
 .replay-event.moment .moment-body{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-fff8e8);border:1px dashed var(--ln-e0b26a);border-radius:10px;font-size:13px}
 .replay-event.moment.bed .moment-body{background:var(--bg-f1efff);border-color:var(--ln-a99ee8)}
 .replay-event.moment.mb .moment-body{background:var(--bg-fff0ee);border-color:var(--ln-e3a39c)}
+
+/* Slim sleep / MB notes (replace the icon markers and full cards) */
+.replay-note{display:grid;grid-template-columns:62px 1fr;gap:12px;align-items:center;font-size:12.5px;line-height:1.4;color:var(--ink,#2a2338)}
+.replay-note .note-time{text-align:right;font-size:11px;color:#5d5170}
+.replay-note .note-text{padding:5px 10px;border-radius:8px;background:#efedff;color:#2e2470}
+.replay-note .note-text b{font-weight:700}
+.replay-note.nap .note-text{background:#f4f2ff}
+.replay-note.mb .note-text{background:#fff0ee;color:#7d1a12;justify-self:start}
+.replay-mb{position:absolute;bottom:3px;width:7px;height:7px;margin-left:-3.5px;border-radius:50%;background:#d93025;box-shadow:0 0 0 2px #fff;z-index:2}
+.mb-key{background:#d93025;border-radius:50%!important}
+@media(max-width:580px){.replay-note{grid-template-columns:48px 1fr;gap:8px}}

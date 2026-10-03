@@ -226,3 +226,15 @@ test('a renamed goal for the same subject replaces the old one; exam date in the
   assert.deepEqual(oct3.moods[0].feelings, ['motivated']);
   assert.equal(oct3.moods[0].notes, 'Feeling oddly motivated today.');
 });
+
+test('going back to bed hours after getting up is a nap, not more of the night', () => {
+  const r = run(csv(
+    's1,2026-10-03,01:00,,Life,sleep,sleep,Sleep,,,,closed,2026-10-03T01:00:00-07:00,,,,0,,,,,,,2026-10-03,',
+    'w1,2026-10-03,08:00,,Life,sleep,wake,Wake,,,,user_reported,,,,,0,,,,,,,2026-10-03,',
+    's2,2026-10-03,10:00,,Life,sleep,sleep,Nap,,,,closed,2026-10-03T10:00:00-07:00,,,,0,,,,,,,2026-10-03,',
+    'w2,2026-10-03,11:20,,Life,sleep,wake,Up,,,,user_reported,,,,,0,,,,,,,2026-10-03,',
+  ));
+  const d = r.daily[0];
+  assert.deepEqual([d.sleep_hours, d.wake_time], [7, '08:00']);
+  assert.deepEqual(d.sleep_segments.map((x) => Boolean(x.nap)), [false, true]);
+});
