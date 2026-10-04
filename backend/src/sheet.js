@@ -226,12 +226,21 @@ function mapLifeRow(row, at, day, ctx) {
     const startStamp = stampFor(row.start_at);
     const base = { kind: 'session', activity, subject, label: label || null };
     if (event === 'start') {
-      // A start closed by its own end/pause row, or marked closed, adds nothing.
-      if (/closed/.test(row.status) || (startStamp && ctx.closedStarts.has(`${category}|${startStamp}`))) {
+      const endStamp = stampFor(row.end_at);
+      // A separate end/pause row for this session (same start or end time) carries it.
+      const hasEndRow = (startStamp && ctx.closedStarts.has(`${category}|${startStamp}`))
+        || (endStamp && ctx.endedAt.has(`${category}|${endStamp}`));
+      if (hasEndRow) {
         // covered by the end row
-      } else if (num(row.minutes_confirmed) > 0) {
-        // Never closed, but some minutes were confirmed: count those.
-        add('', { ...base, action: 'end', minutes: num(row.minutes_confirmed), started_at: startStamp }, startStamp ?? at);
+      } else if (endStamp && startStamp && endStamp <= startStamp && num(row.minutes_confirmed) > 0) {
+        // end_at no later than start_at but minutes say otherwise: can't place it.
+        ctx.issues.push({ row_id: row.row_id, reason: `end_at (${row.end_at}) is not after start_at (${row.start_at}) but minutes_confirmed is ${row.minutes_confirmed}; fix the times` });
+      } else if (num(row.minutes_confirmed) > 0 && (endStamp || !/closed/.test(row.status))) {
+        // Hermes closed it on the start row itself (end_at + minutes_confirmed),
+        // or confirmed some minutes without an end: count those minutes.
+        add('', { ...base, action: 'end', minutes: num(row.minutes_confirmed), started_at: startStamp }, endStamp ?? startStamp ?? at);
+      } else if (/closed/.test(row.status)) {
+        // marked closed with no minutes: nothing to count
       } else {
         add('', { ...base, action: 'start', minutes: null }, startStamp ?? at);
       }
@@ -454,7 +463,10 @@ export function mapSheetRows(rawRows, issues = []) {
   const closedStarts = new Set(rows
     .filter((r) => ['end', 'pause'].includes(r.event.toLowerCase()) && stampFor(r.start_at))
     .map((r) => `${r.category.toLowerCase()}|${stampFor(r.start_at)}`));
-  const ctx = { closedStarts };
+  const endedAt = new Set(rows
+    .filter((r) => ['end', 'pause'].includes(r.event.toLowerCase()) && stampFor(r.end_at))
+    .map((r) => `${r.category.toLowerCase()}|${stampFor(r.end_at)}`));
+  const ctx = { closedStarts, endedAt, issues };
 
   for (const row of rows) {
     if (!row.row_id) { if (row.date || row.label) issues.push({ row_id: null, reason: `row without row_id (${row.date} ${row.label})`.trim() }); continue; }
