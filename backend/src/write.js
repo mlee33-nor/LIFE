@@ -37,7 +37,17 @@ export function parseIso(value, name, { endOfDay = false } = {}) {
   return { sql: `($::timestamp AT TIME ZONE '${TIMEZONE}')`, param: `${date}T${time}` };
 }
 
+// "Life", "Food + stomach", "food & stomach", "SKIN" -> life / food / skin.
+export function normalizeTracker(value) {
+  const t = String(value ?? '').toLowerCase().trim();
+  if (t.startsWith('food') || t.startsWith('stomach')) return 'food';
+  if (t.startsWith('skin') || t.startsWith('acne')) return 'skin';
+  if (t.startsWith('life')) return 'life';
+  return t;
+}
+
 export function validateLog(body) {
+  if (body && typeof body === 'object' && !Array.isArray(body)) body = { ...body, tracker: normalizeTracker(body.tracker) };
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
     throw new ValidationError(['body must be a JSON object: { tracker, at?, data }']);
   }

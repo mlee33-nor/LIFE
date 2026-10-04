@@ -30,6 +30,7 @@ import { METRICS, TIMEZONE, ACTIVITIES, HABITS, localDate, localIso } from './in
 import {
   checkApiKey,
   insertLog,
+  insertLogs,
   listEntries,
   readBody,
   readJson,
@@ -121,12 +122,41 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
 
   // --- Logging-agent routes -------------------------------------------
 
+  // Recent failed writes from the agent, newest first (no keys or bodies kept).
+  const writeErrors = [];
+  const noteWriteError = (req, url, err) => {
+    writeErrors.unshift({ at: localIso(new Date()), method: req.method, path: url.pathname, status: err.status ?? (err instanceof ValidationError ? 400 : 503), error: err.message });
+    writeErrors.length = Math.min(writeErrors.length, 20);
+  };
+
   async function handleAgent(req, url) {
+    try {
+      return await handleAgentInner(req, url);
+    } catch (err) {
+      noteWriteError(req, url, err);
+      throw err;
+    }
+  }
+
+  async function handleAgentInner(req, url) {
     if (!writeApiKey) throw new HttpError(503, 'WRITE_API_KEY is not configured on the server');
     if (!checkApiKey(req, writeApiKey, url)) throw new HttpError(401, 'Missing or invalid API key');
 
     if (url.pathname === '/log' && req.method === 'POST') {
-      const id = await insertLog(pool, validateLog(await readJson(req)));
+      const body = await readJson(req);
+      if (Array.isArray(body)) {
+        if (!body.length) throw new ValidationError(['the list is empty']);
+        if (body.length > 100) throw new ValidationError(['send at most 100 entries at once']);
+        // Validate every entry first; one bad entry means nothing is saved.
+        const errors = [];
+        const entries = body.map((entry, i) => {
+          try { return validateLog(entry); } catch (err) { errors.push(...(err.errors ?? [err.message]).map((m) => `entry ${i + 1}: ${m}`)); return null; }
+        });
+        if (errors.length) throw new ValidationError(errors);
+        const ids = await insertLogs(pool, entries);
+        return { ok: true, ids, count: ids.length };
+      }
+      const id = await insertLog(pool, validateLog(body));
       return { ok: true, id };
     }
     if (url.pathname === '/entries' && req.method === 'GET') {
@@ -413,6 +443,7 @@ export function createServer(store, { pool, writeApiKey, readApiKey } = {}) {
         skipped: status.issues ?? [],
         photo_errors: status.photo_errors ?? [],
         removal_skipped: status.skipped_removal ?? null,
+        write_errors: writeErrors,
         unclosed_sessions: state.staleSessions.map((s) => ({ row_id: s.row_id, activity: s.activity, subject: s.subject, started_at: s.started_at })),
       };
     },

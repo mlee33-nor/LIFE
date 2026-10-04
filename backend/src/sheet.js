@@ -253,9 +253,12 @@ function mapLifeRow(row, at, day, ctx) {
   } else if (['bonus', 'ritual', 'care'].includes(category) && (label || event)) {
     if (/^(false|no|skipped)$/i.test(row.value)) add('', { kind: 'miss', habit: canonicalHabit(label, event), text: row.notes || null });
     else add('', { kind: 'habit', habit: canonicalHabit(label, event), value: null, text: row.value || null });
-  } else if (category === 'symptom' && /headache/i.test(label)) {
+  } else if (/stomach|tummy|gut|cramp/i.test(`${label} ${category}`) && /pain|ache|hurt|cramp/i.test(`${label} ${category} ${event}`)) {
+    // Stomach pain logged on the Life side ("health / symptom / Stomach Pain"): a pain report.
+    out.push({ key: row.row_id, tracker: 'food', at, day, data: { kind: 'pain_report', pain: num(row.value) ?? num(row.severity_0_10), text: [label, row.notes].filter(Boolean).join(' — ') || 'stomach pain' } });
+  } else if ((category === 'symptom' || category === 'health') && /headache/i.test(label)) {
     add('', { kind: 'headache', severity: num(row.value), text: row.notes || null });
-  } else if (category === 'symptom' || category === 'note') {
+  } else if (category === 'symptom' || category === 'note' || category === 'health') {
     add('', { kind: 'life_note', note_kind: category, text: [label, row.value, row.notes].filter(Boolean).join(' — ') || null });
   } else if (category === 'todo') {
     // One row per task; Hermes flips `status` to done/skipped on the same row.
@@ -302,7 +305,10 @@ function mapSkinRow(row, at, day, issues) {
   const count = num(row.value);
   const routine = skinRoutine(label);
 
-  if (routine && yes !== null) {
+  // A routine check-in with no TRUE/FALSE (e.g. "AM Routine" reported) means done.
+  if (routine && yes === null && !row.value && /check|routine|reported/i.test(`${row.event} ${row.category}`)) {
+    add('life', { kind: 'habit', habit: routine, value: null, text: row.notes || null });
+  } else if (routine && yes !== null) {
     add('life', yes ? { kind: 'habit', habit: routine, value: null } : { kind: 'miss', habit: routine, text: row.notes || null });
   } else if (label === 'water' && count !== null) {
     const glasses = row.unit === 'oz' ? Math.round((count / 8) * 10) / 10 : count;

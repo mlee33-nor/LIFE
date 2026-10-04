@@ -31,3 +31,10 @@ test('checkApiKey accepts bearer header or ?key=, rejects others', () => {
   assert.equal(checkApiKey(req({}), 'abc', new URL('http://x/?key=abc')), true);
   assert.equal(checkApiKey(req({ authorization: 'Bearer abc' }), undefined), false);
 });
+
+test('tracker names are accepted the way the sheet writes them', async () => {
+  const { validateLog } = await import('../src/write.js');
+  assert.equal(validateLog({ tracker: 'Life', data: {} }).tracker, 'life');
+  assert.equal(validateLog({ tracker: 'Food + stomach', data: {} }).tracker, 'food');
+  assert.equal(validateLog({ tracker: 'SKIN', data: {} }).tracker, 'skin');
+});

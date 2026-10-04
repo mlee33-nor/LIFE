@@ -238,3 +238,14 @@ test('going back to bed hours after getting up is a nap, not more of the night',
   assert.deepEqual([d.sleep_hours, d.wake_time], [7, '08:00']);
   assert.deepEqual(d.sleep_segments.map((x) => Boolean(x.nap)), [false, true]);
 });
+
+test('stomach pain logged on the Life side is a pain report; a bare routine check-in counts as done', () => {
+  const r = run(csv(
+    'p,2026-10-04,13:32,,Life,health,symptom,Stomach Pain,,,,user_reported,,,,,0,,,,,,,2026-10-04,',
+    'a,2026-10-04,12:11,,Skin,routine,checkin,AM Routine,,,,user_reported,,,,,,,,,,,,2026-10-04,',
+  ));
+  const d = r.daily[0];
+  assert.equal(d.pain_reports.length, 1);
+  assert.equal(d.pain_reports[0].pain, null);
+  assert.ok(d.habits.am_skincare);
+});
