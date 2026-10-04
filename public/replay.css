@@ -43,3 +43,6 @@
 .replay-mb{position:absolute;bottom:3px;width:7px;height:7px;margin-left:-3.5px;border-radius:50%;background:#d93025;box-shadow:0 0 0 2px #fff;z-index:2}
 .mb-key{background:#d93025;border-radius:50%!important}
 @media(max-width:580px){.replay-note{grid-template-columns:48px 1fr;gap:8px}}
+
+/* Small sun at the end of the night's sleep = wake-up */
+.replay-sun{position:absolute;width:18px;height:18px;margin:5px 0 0 -9px;border-radius:50%;background:#fff3c4;box-shadow:0 0 0 2px #fff;color:#b86a00;font-size:12px;line-height:18px;text-align:center;z-index:3;pointer-events:auto}
